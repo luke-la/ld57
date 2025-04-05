@@ -4,7 +4,7 @@ canvas.width = 948;
 canvas.height = 533;
 
 const tileSize = Math.ceil(canvas.height / 12);
-const frameRate = 60;
+const frameRate = 120;
 const gravity = 0.02;
 const termVelocity = 3
 const groundFriction = 0.95
@@ -12,7 +12,7 @@ const groundFriction = 0.95
 const player = {
   pos: {
     x: 32, // in meters
-    y: 0, // +y moves down (same as screenspace)
+    y: -2, // +y moves down (same as screenspace)
     depth: 1.5, // affects which layer of map you interact with
   },
   size: {
@@ -30,12 +30,44 @@ const player = {
   onGround: false,
 };
 
+const tetherPoints = []
+const controlPoints = []
+const controlFidelity = 25
+
+function addTether() {
+  tetherPoints.push(controlPoints)
+  tetherPoints.push({
+    x: player.pos.x,
+    y: player.pos.y,
+    z: player.pos.depth,
+  })
+  controlPoints.length = 0
+  for (let i = 0; i < controlFidelity; i++) {
+    controlPoints.push({
+      x: player.pos.x,
+      y: player.pos.y,
+      z: player.pos.depth,
+    })
+  }
+}
+
+addTether()
+
+function getScreenspaceTether(tp) {
+  return {
+    x: (tp.x - player.pos.x + player.size.width / 2) * tileSize,
+    y: (tp.y - player.pos.y + player.size.height / 2) * tileSize
+  }
+}
+
+//HANDLE DRAWING ENVIRONMENT TO THE SCREEN
+
 draw();
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   ctx.save();
+
   ctx.fillStyle = "black";
   //ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.translate(
@@ -61,7 +93,6 @@ function draw() {
   let playerDrawn = false
 
   for (let floor of drawData) {
-    console.log("here")
     if (floor.depth[1] < player.pos.depth && !playerDrawn) {
       ctx.fillStyle = "red";
       ctx.fillRect(
@@ -104,6 +135,22 @@ function draw() {
     playerDrawn = true
   }
   
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = "green"
+  ctx.beginPath()
+  const start = getScreenspaceTether(tetherPoints[0])
+  ctx.moveTo(start.x, start.y)
+  for (let t of tetherPoints) {
+    const point = getScreenspaceTether(t)
+    ctx.lineTo(point.x, point.y)
+  }
+  for (let c of controlPoints) {
+    const point = getScreenspaceTether(c)
+    ctx.lineTo(point.x, point.y)
+  }
+  ctx.lineTo(player.size.screenWidth / 2, tileSize * -(player.pos.depth - 2))
+  ctx.stroke()
+  
   const lightness = Math.max(0, 100 - player.pos.y)
   ctx.fillStyle = `rgba(${lightness}, ${lightness}, 255, 0.5)`;
   const ocean = background.ocean.getScreenDimensions(player.pos, tileSize)
@@ -113,7 +160,9 @@ function draw() {
   
 }
 
+// HANDLE PLAYER INPUT
 
+let acceptingInput = true
 const pressedKeys = {
   w: false,
   a: false,
@@ -128,14 +177,28 @@ addEventListener("keyup", (e) => {
   toggleKeys(e, false);
 });
 
-
 function toggleKeys(e, state = true) {
-  if (e.key === "w") pressedKeys.w = state;
-  if (e.key === "a") pressedKeys.a = state;
-  if (e.key === "s") pressedKeys.s = state;
-  if (e.key === "d") pressedKeys.d = state;
+  if (e.key === "w" || e.key == "W") pressedKeys.w = state;
+  if (e.key === "a" || e.key == "A") pressedKeys.a = state;
+  if (e.key === "s" || e.key == "S") pressedKeys.s = state;
+  if (e.key === "d" || e.key == "D") pressedKeys.d = state;
+  if (e.key === "t") addTether()
   if (e.key === " ") pressedKeys.space = state;
 }
+
+function timeoutControls(ms) {
+  acceptingInput = false
+  pressedKeys.w = false;
+  pressedKeys.a = false;
+  pressedKeys.s = false;
+  pressedKeys.d = false;
+  pressedKeys.space = false;
+  setTimeout(function () {
+    acceptingInput = true;
+  })
+} 
+
+// HANDLE GAME LOOP
 
 setInterval(update, 1000 / frameRate);
 
@@ -145,7 +208,10 @@ function update() {
   //handle side to side movement
   if (pressedKeys.a) player.velocity.x = -player.speed;
   if (pressedKeys.d) player.velocity.x = player.speed;
-  if (!pressedKeys.a && !pressedKeys.d) player.velocity.x *= groundFriction
+  if (player.velocity.x != 0) {
+    player.velocity.x *= groundFriction
+  }
+
   // handle depth
   if (pressedKeys.w) player.velocity.d = player.speed;
   if (pressedKeys.s) player.velocity.d = -player.speed;
@@ -164,15 +230,15 @@ function update() {
     if (player.velocity.y > termVelocity) player.velocity.y = termVelocity
   }
 
-  // test for falling collision
+  // test for collision
+  const nextX = player.pos.x + player.velocity.x / frameRate
+  const nextY = player.pos.y + player.velocity.y / frameRate
+  const nextDepth = player.pos.depth + player.velocity.d / frameRate
   if (nearestLevel) {
+    //falling colision
     player.onGround = nearestLevel.floorData.some(function (floor) {
-      if (player.pos.depth > floor.depth[1] || player.pos.depth < floor.depth[0]) {
-        return false;
-      }
-      if (floor.x > player.pos.x + player.size.width || floor.x + floor.width < player.pos.x) {
-        return false;
-      }
+      if (player.pos.depth > floor.depth[1] || player.pos.depth < floor.depth[0]) return false;
+      if (floor.x > player.pos.x + player.size.width || floor.x + floor.width < player.pos.x) return false;
       if (floor.y <= player.pos.y + player.size.height && floor.y > player.pos.y) {
         player.pos.y = floor.y - player.size.height;
         player.velocity.y = 0;
@@ -180,6 +246,7 @@ function update() {
       }
       else return false;
     })
+
   }
   else {
     player.onGround = false
@@ -187,8 +254,18 @@ function update() {
 
   // move player
   player.pos.x += player.velocity.x / frameRate
-  if (!player.onGround) player.pos.y += player.velocity.y / frameRate
+  player.pos.y += player.velocity.y / frameRate
   player.pos.depth += player.velocity.d / frameRate
+
+  // move tether control points
+  let modifier = 1
+  for (let i in controlPoints) {
+    controlPoints[i].x += player.velocity.x / frameRate * modifier
+    controlPoints[i].y += player.velocity.y / frameRate * modifier
+    controlPoints[i].d += player.velocity.d / frameRate * modifier
+  }
+  console.log(controlPoints)
+
 
   // redraw
   draw();
