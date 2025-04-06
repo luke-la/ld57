@@ -3,12 +3,12 @@ const ctx = canvas.getContext("2d");
 canvas.width = 948;
 canvas.height = 533;
 
-const tileSize = Math.ceil(canvas.height / 16);
+const tileSize = Math.ceil(canvas.width / 24);
 const frameRate = 120;
 const gravity = 1.5;
 const termVelocity = 2;
-const groundSlow = 0.01;
-const waterSlow = 0.8;
+const groundSlow = 0.0001;
+const waterSlow = 0.2;
 
 let acceptingInput = true;
 const pressedKeys = {
@@ -21,15 +21,13 @@ const pressedKeys = {
 
 const player = {
   pos: {
-    x: 32, // in meters
-    y: -2, // +y moves down (same as screenspace)
+    x: 31, // in meters
+    y: -1, // +y moves down (same as screenspace)
     depth: 1.5, // affects which layer of map you interact with
   },
   size: {
-    width: 0.5,
+    width: 1,
     height: 1,
-    screenWidth: tileSize / 2,
-    screenHeight: tileSize,
   },
   speed: 2, // m/s
   acceleration: 0.2,
@@ -88,7 +86,12 @@ function getScreenspaceTether(p) {
   };
 }
 
-//HANDLE DRAWING ENVIRONMENT TO THE SCREEN
+// HANDLE DRAWING ENVIRONMENT TO THE SCREEN
+const drawData = []
+for (let level of levels) drawData.push(...level.floorData, ...level.hazzardData)
+drawData.sort(function (a, b) {
+  return b.getZIndex() - a.getZIndex();
+});
 
 draw();
 
@@ -99,8 +102,8 @@ function draw() {
   ctx.fillStyle = "black";
   //ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.translate(
-    canvas.width / 2 - player.size.screenWidth / 2,
-    canvas.height / 2 - player.size.screenHeight / 2
+    canvas.width / 2 - player.size.width * tileSize / 2,
+    canvas.height / 2 - player.size.height * tileSize / 2
   );
 
   //draw background
@@ -111,48 +114,37 @@ function draw() {
   }
 
   //draw level
-  const drawData = [...level1.floorData, ...level2.floorData];
-  drawData.sort(function (a, b) {
-    a.getZIndex() - b.getZIndex;
-  });
+  
+  
 
   let playerDrawn = false;
 
-  for (let floor of drawData) {
-    if (floor.depth[1] < player.pos.depth && !playerDrawn) {
-      ctx.fillStyle = "red";
+  for (let d of drawData) {
+    if (d.getZIndex() < player.pos.depth && !playerDrawn) {
+      ctx.fillStyle = "blue";
       ctx.fillRect(
         0,
         (tileSize / 3) * -(player.pos.depth - 1),
-        player.size.screenWidth,
-        player.size.screenHeight
+        player.size.width * tileSize,
+        player.size.height * tileSize
       );
 
       playerDrawn = true;
     }
 
-    const topRect = floor.getScreenDimensionsTop(player.pos, tileSize);
-    ctx.fillStyle = "black";
-    ctx.fillRect(topRect.x, topRect.y, topRect.width, topRect.height);
+    if (d.hazzardous) ctx.fillStyle = "red"
+    else ctx.fillStyle = "gray";
+    const topRect = d.getScreenDimensionsTop(player.pos, tileSize);
+    ctx.fillRect(topRect.x, topRect.y, topRect.width + 1, topRect.height + 1);
 
-    const sideRect = floor.getScreenDimensionsSide(player.pos, tileSize);
-    ctx.fillStyle = "gray";
-    ctx.fillRect(sideRect.x, sideRect.y, sideRect.width, sideRect.height);
-  }
-  if (!playerDrawn) {
-    ctx.fillStyle = "red";
-    ctx.fillRect(
-      0,
-      (tileSize / 3) * -(player.pos.depth - 1),
-      player.size.screenWidth,
-      player.size.screenHeight
-    );
-
-    playerDrawn = true;
+    if (d.hazzardous) ctx.fillStyle = "darkred"
+    else ctx.fillStyle = "black";
+    const sideRect = d.getScreenDimensionsSide(player.pos, tileSize);
+    ctx.fillRect(sideRect.x, sideRect.y, sideRect.width + 1, sideRect.height + 1);
   }
 
   ctx.lineWidth = 5;
-  ctx.strokeStyle = "green";
+  ctx.strokeStyle = "blue";
   ctx.beginPath();
   const start = getScreenspaceTether(tether.points[0]);
   ctx.moveTo(start.x, start.y);
@@ -161,21 +153,8 @@ function draw() {
     const point = getScreenspaceTether(drawnPoints[i]);
     ctx.lineTo(point.x, point.y);
   }
-  ctx.lineTo(player.size.screenWidth / 2, (tileSize / 3) * -(player.pos.depth - 2))
+  ctx.lineTo(player.size.width * tileSize / 2, (tileSize / 3) * -(player.pos.depth - 2))
   ctx.stroke();
-  /*ctx.beginPath();
-  ctx.strokeStyle = "yellow";
-  for (let c of tether.flexPoints) {
-    const point = getScreenspaceTether(c);
-    ctx.lineTo(point.x, point.y);
-    ctx.fillRect(
-      point.x,
-      point.y,
-      player.size.screenWidth / 4,
-      player.size.screenWidth / 4
-    );
-  }
-  ctx.stroke();*/
 
   const lightness = Math.max(0, 100 - player.pos.y);
   ctx.fillStyle = `rgba(${lightness}, ${lightness}, 255, 0.5)`;
@@ -200,7 +179,7 @@ function toggleKeys(e, state = true) {
   if (e.key === "a" || e.key == "A") pressedKeys.a = state;
   if (e.key === "s" || e.key == "S") pressedKeys.s = state;
   if (e.key === "d" || e.key == "D") pressedKeys.d = state;
-  if (e.key === "t") addTether();
+  if (e.key === "t" && player.onGround) addTether();
   if (e.key === " ") pressedKeys.space = state;
 }
 
@@ -276,27 +255,28 @@ function update() {
       const box = {
         x: floor.x,
         y: floor.y,
-        z: floor.depth[0],
+        z: floor.z,
         width: floor.width,
         height: floor.height,
-        depth: floor.depth[1],
+        depth: floor.depth,
       };
 
-      // check for ground
+      // check for ground || ceiling
       if (!player.onGround) {
         const above = (player.pos.y + player.size.height <= box.y)
         const collision = isPlaneInBox(
           {
-            x: nextX,
+            x: player.pos.x,
             y: nextY,
             width: player.size.width,
             height: player.size.height,
-            z: nextDepth,
+            z: player.pos.depth,
           },
           box
         );
         player.onGround = collision && above
         if (player.onGround && !groundFloor) groundFloor = floor
+        if (collision && player.velocity.y < 0) player.velocity.y = 0
       }
 
       let sideCollision = false
@@ -388,6 +368,7 @@ function update() {
       yDiff = last.y * tether.flex;
       zDiff = last.z * tether.flex;
     }
+
     tether.flexPoints[i].x += xDiff
     tether.flexPoints[i].y += yDiff
     tether.flexPoints[i].z += zDiff
