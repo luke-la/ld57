@@ -41,6 +41,9 @@ class Floor {
 
     return { x, y, width, height };
   }
+  getZIndex() {
+    return this.depth[1]
+  }
 }
 
 class BackgroundDeco {
