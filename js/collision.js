@@ -20,10 +20,20 @@ function isPlaneInBox(plane, box) {
   );
 }
 
+function dist(p1, p2) {
+  return Math.sqrt(
+    Math.pow(p2.x - p1.x, 2) +
+      Math.pow(p2.y - p1.y, 2) +
+      Math.pow(p2.z - p1.z, 2)
+  );
+}
+
 // Run Collision Tests
 function logTest(testName, expected, result) {
   if (expected === result) {
-    console.log(`TEST ${testName.toUpperCase()}: Returned ${expected} as expected.`);
+    console.log(
+      `TEST ${testName.toUpperCase()}: Returned ${expected} as expected.`
+    );
   } else {
     console.log(`${testName} returned ${!expected}. Expected: ${expected}`);
   }

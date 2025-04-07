@@ -58,6 +58,7 @@ class BackgroundDeco {
 }
 
 const background = {
+  boat: new BackgroundDeco(28, -3.666, 10, 5),
   ocean: new BackgroundDeco(-100, 0, 200, 500),
   rigData: [
     new BackgroundDeco(-25, -20, 5, 500),
@@ -69,8 +70,14 @@ const background = {
   ]
 }
 
+const level0 = {
+  floorData: [
+    new Box(31, -1, 1, 1, Box.back),
+  ],
+  endingY: 0,
+}
+
 const level1 = {
-  startingY: 0,
   floorData: [
     new Box(18, 7, 15, 1, Box.all),
     new Box(12, 6, 4, 8, Box.all),
@@ -92,7 +99,6 @@ const level1 = {
 };
 
 const level2 = {
-  startingY: 25,
   floorData: [
     new Box(-36, 42, 8, 1, Box.all),
     new Box(-24, 32, 4, 7, Box.all),
@@ -135,11 +141,10 @@ const level2 = {
     new Box(-7.5, 44, 0.5, 2, Box.middle, true),
     new Box(-4, 44, 0.5, 2, Box.middle, true),
   ],
-  endingY: 50,
+  endingY: 55,
 };
 
 const level3 = {
-  startingY: 60,
   floorData: [
     new Box(35, 81, 15, 1, Box.all),
     new Box(30, 83, 2, 0.5, Box.all),
@@ -183,4 +188,4 @@ const level3 = {
   endingY: 95
 }
 
-const levels = [level1, level2, level3]
+const levels = [level0, level1, level2, level3]
