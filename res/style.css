@@ -1,9 +1,24 @@
 body {
   margin: 0;
-  display: grid;
-  justify-content: center;
+  position: relative;
 }
 
-canvas {
-  padding-top: 15%;
+canvas,
+.menu {
+  position: absolute;
+  top: 25px;
+  left: 25px;
+}
+
+button {
+  display: block;
+  margin-top: 100px;
+  margin-left: 50px;
+  background-color: transparent;
+  outline: none;
+  border: none;
+  border-bottom: 10px solid transparent;
+}
+button:hover {
+  border-color: white;
 }

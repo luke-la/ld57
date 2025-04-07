@@ -3,14 +3,21 @@ const ctx = canvas.getContext("2d");
 canvas.width = 1000; // 948
 canvas.height = 500; // 533
 const frameRate = 120;
+const translate = {
+  x: canvas.width * 3 / 4,
+  y: canvas.height / 2,
+};
+
 let tileSize = Math.ceil(canvas.width / 18);
 
-const gravity = 1.5;
-const termVelocity = 2;
-const groundSlow = 0.0001;
-const waterSlow = 0.2;
+let inWater = false
 
-let acceptingInput = true;
+let gravity = 7;
+let termVelocity = 6;
+let groundSlow = 0.0001;
+let waterSlow = 0.2;
+
+let acceptingInput = false;
 const pressedKeys = {
   w: false,
   a: false,
@@ -22,8 +29,8 @@ const pressedKeys = {
 const player = {
   pos: {
     x: 31, // in meters
-    y: -1, // +y moves down (same as screenspace)
-    z: 1.5, // affects which layer of map you interact with
+    y: -3, // +y moves down (same as screenspace)
+    z: 2.2, // affects which layer of map you interact with
   },
   center: {
     x: 0,
@@ -52,7 +59,47 @@ const player = {
   bubbles: [],
 };
 
-player.bubbles[0] = new BubbleGenerator(player.pos, 0.4, frameRate, true, 2);
+
+// MENUS AND STUFF -----------------------------------------------------
+
+const playMenu = document.getElementById("game-play-menu")
+
+const playButton = document.getElementById("btn-play")
+playButton.addEventListener("click", function () {
+  
+  // hide menu
+  playMenu.style.display = "none"
+
+  // pan camera
+  const titleCameraPanInterval = setInterval(function () {
+    if (translate.x > canvas.width / 2) translate.x -= (translate.x - (canvas.width / 2)) * 3 / frameRate
+    else {
+      translate.x = canvas.width / 2
+      clearInterval(titleCameraPanInterval)
+    }
+  }, 1000 / frameRate)
+
+  // shove player into water
+  setTimeout(function () {
+    player.velocity.z -= 2
+  }, 1000)
+  setTimeout(function () {
+    player.velocity.z = 0
+  }, 2500)
+
+  // let player play
+  setTimeout(function () {
+    acceptingInput = true;
+  }, 3000)
+})
+
+function playerHitWater() {
+  inWater = true;
+  console.log("Water!")
+  gravity = 1.5;
+  termVelocity = 2;
+  player.bubbles[0] = new BubbleGenerator(player.pos, 0.4, frameRate, true, 2);
+}
 
 // TETHER HANDLING -----------------------------------------------------
 
@@ -66,12 +113,18 @@ const tether = {
 };
 
 // adds all flex points to tether and removes them
-function addTetherAnchor(point) {
+function addTetherAnchor(point, timeout = true) {
   tether.points.push(...tether.flexPoints, point);
   tether.flexPoints.length = 0;
   addControPoint();
-  timeoutControls(1000);
+  if (timeout) timeoutControls(2000);
 }
+
+addTetherAnchor({
+  x: 32,
+  y: -1,
+  z: 2,
+}, false);
 
 // moves oldest flex point to tether and generates new one on player
 
@@ -103,12 +156,6 @@ function cutTether(index) {
   );
 }
 
-addTetherAnchor({
-  x: player.pos.x + player.size.width / 2,
-  y: player.pos.y + player.size.height / 2,
-  z: player.pos.z,
-});
-
 function getScreenspacePoint(p) {
   return {
     x: (p.x - player.pos.x) * tileSize,
@@ -119,8 +166,10 @@ function getScreenspacePoint(p) {
 // DRAWING -----------------------------------------------------
 
 const drawData = [];
-for (let level of levels)
-  drawData.push(...level.floorData, ...level.hazzardData);
+for (let level of levels) {
+  if (level.floorData) drawData.push(...level.floorData);
+  if (level.hazzardData) drawData.push(...level.hazzardData);
+}
 drawData.sort(function (a, b) {
   return b.getZIndex() - a.getZIndex();
 });
@@ -138,11 +187,6 @@ const sprites = {
   ),
 };
 
-const translate = {
-  x: canvas.width / 2,
-  y: canvas.height / 2,
-};
-
 function isOnScreen(x, y, w, h) {
   if (
     x > translate.x ||
@@ -154,9 +198,8 @@ function isOnScreen(x, y, w, h) {
   else return true;
 }
 
-draw();
-
 function draw() {
+  console.log(player.pos.z)
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
 
@@ -201,17 +244,6 @@ function draw() {
           }
         }
       }
-      /*ctx.drawImage(
-        bgSprite.image,
-        cropInfo.sx,
-        cropInfo.sy,
-        cropInfo.swidth,
-        cropInfo.sheight,
-        startPoint.x,
-        startPoint.y,
-        bgSprite.gameSize.width * tileSize,
-        bgSprite.gameSize.height * tileSize
-      );*/
     } else {
       const rect = bg.getScreenDimensions(player.pos, tileSize);
       ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
@@ -330,18 +362,17 @@ function draw() {
 
   ctx.restore();
 
-  ctx.font = "bold 20px monospace";
-  ctx.textBaseline = "top";
-  ctx.fillStyle = "black";
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 2;
-  ctx.strokeText(`DEPTH: ${(player.pos.y + 1).toFixed(0)}`, 15, 15);
-  ctx.fillText(`DEPTH: ${(player.pos.y + 1).toFixed(0)}`, 15, 15);
+  if (inWater) {
+    ctx.font = "bold 20px monospace";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "white";
+    ctx.fillText(`DEPTH: ${(player.pos.y + 1).toFixed(0)}`, 15, 15);
+  }
 
   for (let key in sprites) sprites[key].checkFrameCount();
 }
 
-// HANDLE PLAYER INPUT
+// HANDLE PLAYER INPUT -----------------------------------------------------
 
 addEventListener("keydown", (e) => {
   toggleKeys(e);
@@ -377,16 +408,17 @@ function timeoutControls(ms) {
   }, ms);
 }
 
-// HANDLE GAME LOOP
+// HANDLE GAME LOOP -----------------------------------------------------
 
 setInterval(update, 1000 / frameRate);
 
 function update() {
   //tileSize = (canvas.width + player.pos.y * 5) / 18;
+  if (!inWater) {
+    if (player.pos.y + player.size.height / 2 > 0) playerHitWater()
+  } 
 
-  const nearestLevel = levels.find(
-    (level) => player.pos.y > level.startingY && player.pos.y < level.endingY
-  );
+  const nearestLevel = levels.find((level) => player.pos.y < level.endingY);
 
   //handle side to side movement
   if (pressedKeys.a && !pressedKeys.d) {
@@ -417,10 +449,10 @@ function update() {
     );
 
   // if player is moving
-  if (pressedKeys.a || pressedKeys.d || pressedKeys.w || pressedKeys.s) {
+  if (player.bubbles[0] && (pressedKeys.a || pressedKeys.d || pressedKeys.w || pressedKeys.s)) {
     player.bubbles[0].cycleSpeed = 1;
     player.bubbles[0].rate = 0.2;
-  } else {
+  } else if (player.bubbles[0]){
     player.bubbles[0].cycleSpeed = 2;
     player.bubbles[0].rate = 0.4;
   }
@@ -443,7 +475,7 @@ function update() {
   const nextY = player.pos.y + player.velocity.y / frameRate;
   const nextDepth = player.pos.z + player.velocity.z / frameRate;
 
-  if (nearestLevel) {
+  if (nearestLevel.floorData) {
     const lastState = player.onGround;
     player.onGround = false;
     let groundFloor = null;
@@ -577,7 +609,7 @@ function update() {
     }
 
     // test collision for not movement
-    if (nearestLevel) {
+    if (nearestLevel.floorData) {
       for (let floor of nearestLevel.floorData) {
         const box = {
           x: floor.x,
@@ -624,7 +656,8 @@ function update() {
         )
           zDiff = 0;
       }
-
+    }
+    if (nearestLevel.hazzardData) {
       for (let hazzard of nearestLevel.hazzardData) {
         if (isPointInBox(tether.flexPoints[i], hazzard)) {
           cut = true;
