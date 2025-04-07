@@ -413,7 +413,7 @@ function draw() {
   // draw water
 
   const lightness = 150 - player.pos.y / 100 //????????? bflsbfhsdjhcba
-  const transparancy = (inWater) ? 50 + (player.pos.y2 / 10) : 80;
+  const transparancy = (inWater) ? 50 + (player.pos.y / 10) : 80;
   ctx.fillStyle = `hsla(220, 50%, 50%, ${transparancy}%)`;
   const ocean = background.ocean.getScreenDimensions(player.pos, tileSize);
   ctx.fillRect(ocean.x, ocean.y, ocean.width, ocean.height);
