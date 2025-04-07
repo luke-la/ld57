@@ -1,10 +1,12 @@
 body {
   margin: 0;
   position: relative;
+  background-color: #111;
 }
 
 canvas,
-.menu {
+.menu,
+#overlay {
   position: absolute;
   top: 25px;
   left: 25px;

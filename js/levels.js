@@ -58,6 +58,7 @@ class BackgroundDeco {
 }
 
 const background = {
+  boat: new BackgroundDeco(28, -3.666, 10, 5),
   ocean: new BackgroundDeco(-100, 0, 200, 500),
   rigData: [
     new BackgroundDeco(-25, -20, 5, 500),
@@ -71,7 +72,7 @@ const background = {
 
 const level0 = {
   floorData: [
-    new Box(30, -2, 4, 1, Box.back),
+    new Box(31, -1, 1, 1, Box.back),
   ],
   endingY: 0,
 }

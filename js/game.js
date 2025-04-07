@@ -8,7 +8,11 @@ const translate = {
   y: canvas.height / 2,
 };
 
-let tileSize = Math.ceil(canvas.width / 18);
+const overlay = document.getElementById("overlay");
+overlay.style.width = `${canvas.width}px`;
+overlay.style.height = `${canvas.height}px`;
+
+let tileSize = Math.ceil(canvas.width / 22);
 
 let inWater = false;
 
@@ -29,7 +33,7 @@ const pressedKeys = {
 const player = {
   pos: {
     x: 31, // in meters
-    y: -3, // +y moves down (same as screenspace)
+    y: -2, // +y moves down (same as screenspace)
     z: 2.2, // affects which layer of map you interact with
   },
   center: {
@@ -52,12 +56,13 @@ const player = {
   onGround: false,
   mirrorSprite: true,
   sprites: {
-    idle: null,
-    moving: new Sprite("./res/diverrun.png", 1, 1, 42, 42, 13, 8),
-    inAir: null,
-    welding: null,
+    idle: new Sprite("./res/diveridle.png", 1, 1, 84, 84, 1, 1),
+    moving: new Sprite("./res/diverrun.png", 1, 1, 84, 84, 13, 8),
+    inAir: new Sprite("./res/diverfall.png", 1, 1, 84, 84, 3, 3),
+    welding: new Sprite("./res/diverweld.png", 1, 1, 84, 84, 3, 3),
   },
   bubbles: [],
+  welding: false,
 };
 
 // MENUS AND STUFF -----------------------------------------------------
@@ -99,6 +104,34 @@ function playerHitWater() {
   gravity = 1.5;
   termVelocity = 2;
   player.bubbles[0] = new BubbleGenerator(player.pos, 0.4, frameRate, true, 2);
+}
+
+function resetGame() {
+  acceptingInput = false;
+  inWater = false;
+  gravity = 7;
+  termVelocity = 6;
+  (translate.x = (canvas.width * 3) / 4), (player.bubbles = []);
+  player.pos = {
+    x: 31,
+    y: -3,
+    z: 2.2,
+  };
+
+  tether.points = [];
+  tether.flexPoints = [];
+  addTetherAnchor(
+    {
+      x: 32,
+      y: -1,
+      z: 2,
+    },
+    false
+  );
+  tether.cut = false;
+
+  playMenu.style.display = "block";
+  overlay.style.backgroundColor = "hsla(0, 0%, 0%, 0%)";
 }
 
 // TETHER HANDLING -----------------------------------------------------
@@ -157,6 +190,8 @@ function cutTether(index) {
     frameRate,
     false
   );
+
+  setTimeout(resetGame, 4000);
 }
 
 function getScreenspacePoint(p) {
@@ -170,6 +205,8 @@ function getScreenspacePoint(p) {
 
 const sprites = {
   bgHorizontal: new Sprite("./res/bghoriz.png", 5, 5, 120, 120, 2, 2),
+  bgVertical: new Sprite("./res/bgvert.png", 5, 10, 120, 240, 1, 1),
+  bgBoat: new Sprite("./res/bgship.png", 10, 5, 240, 120, 1, 1),
 };
 
 function isOnScreen(x, y, w, h) {
@@ -183,9 +220,21 @@ function isOnScreen(x, y, w, h) {
   else return true;
 }
 
-function draw() {
-  const startTime = Date.now()
+function isOnScreen({x, y, width, height}) {
+  if (
+    x > translate.x ||
+    x + width < -translate.x ||
+    y > translate.y ||
+    y + height < -translate.y
+  )
+    return false;
+  else return true;
+}
 
+let overlayLast = 0;
+
+function draw() {
+  const startTime = Date.now();
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
@@ -199,24 +248,16 @@ function draw() {
   for (let bg of background.rigData) {
     ctx.fillStyle = "lightGrey";
     let bgSprite;
-    if (bg.width > bg.height) {
-      bgSprite = sprites.bgHorizontal;
-    }
+    if (bg.width > bg.height) bgSprite = sprites.bgHorizontal;
+    else bgSprite = sprites.bgVertical;
     if (bgSprite) {
       const cropInfo = bgSprite.getSpriteCropInfo();
-      for (let i = 0; i < bg.width / bgSprite.gameSize.width; i++) {
-        for (let j = 0; j < bg.height / bgSprite.gameSize.height; j++) {
+      for (let i = 0; i < bg.height / bgSprite.gameSize.height; i++) {
+        for (let j = 0; j < bg.width / bgSprite.gameSize.width; j++) {
           const start = bg.getScreenDimensions(player.pos, tileSize);
-          start.x += i * bgSprite.gameSize.width * tileSize;
-          start.y += j * bgSprite.gameSize.width * tileSize;
-          if (
-            isOnScreen(
-              start.x,
-              start.y,
-              bgSprite.gameSize.width * tileSize,
-              bgSprite.gameSize.height * tileSize
-            )
-          ) {
+          start.x += j * bgSprite.gameSize.width * tileSize;
+          start.y += i * bgSprite.gameSize.height * tileSize;
+          if (isOnScreen(start.x, start.y, start.width, start.height)) {
             ctx.drawImage(
               bgSprite.image,
               cropInfo.sx,
@@ -237,9 +278,25 @@ function draw() {
     }
   }
 
+  const boatPos = background.boat.getScreenDimensions(player.pos, tileSize);
+  if (isOnScreen(boatPos)) {
+    const cropInfo = sprites.bgBoat.getSpriteCropInfo();
+    ctx.drawImage(
+      sprites.bgBoat.image,
+      cropInfo.sx,
+      cropInfo.sy,
+      cropInfo.swidth,
+      cropInfo.sheight,
+      boatPos.x,
+      boatPos.y,
+      sprites.bgBoat.gameSize.width * tileSize,
+      sprites.bgBoat.gameSize.height * tileSize
+    );
+  }
+
   //draw level
   const drawData = [];
-  const minLevelToDraw = Math.max(0, player.nearestLevel - 1);
+  const minLevelToDraw = Math.max(1, player.nearestLevel - 1);
   const maxLevelToDraw = Math.min(levels.length - 1, player.nearestLevel + 1);
   for (let i = minLevelToDraw; i <= maxLevelToDraw; i++) {
     if (levels[i].floorData) drawData.push(...levels[i].floorData);
@@ -262,7 +319,11 @@ function draw() {
       );*/
       ctx.save();
 
-      const sprite = player.sprites.moving;
+      let sprite = player.sprites.idle;
+      if (pressedKeys.w || pressedKeys.a || pressedKeys.s || pressedKeys.d)
+        sprite = player.sprites.moving;
+      if (!player.onGround) sprite = player.sprites.inAir;
+      if (player.welding) sprite = player.sprites.welding;
       let x = 0;
       let y = (tileSize / 3) * -(player.pos.z - 1);
 
@@ -308,6 +369,8 @@ function draw() {
   }
 
   // draw tether
+  // get line segments
+
   ctx.lineWidth = 5;
   ctx.strokeStyle = "black";
   ctx.beginPath();
@@ -325,11 +388,6 @@ function draw() {
   for (let i = 0; i < tether.flexPoints.length; i++) {
     const point = getScreenspacePoint(tether.flexPoints[i]);
     ctx.lineTo(point.x, point.y);
-  }
-  for (let i = 0; i < tether.flexPoints.length; i++) {
-    const point = getScreenspacePoint(tether.flexPoints[i]);
-    //ctx.lineTo(point.x, point.y);
-    ctx.fillRect(point.x, point.y, tileSize / 6, tileSize / 6);
   }
   ctx.lineTo(
     (player.size.width * tileSize) / 2,
@@ -354,8 +412,9 @@ function draw() {
   }
   // draw water
 
-  const lightness = Math.max(0, 100 - player.pos.y);
-  ctx.fillStyle = `rgba(${lightness}, ${lightness}, 255, 0.5)`;
+  const lightness = 150 - player.pos.y / 100 //????????? bflsbfhsdjhcba
+  const transparancy = (inWater) ? 50 + (player.pos.y2 / 10) : 80;
+  ctx.fillStyle = `hsla(220, 50%, 50%, ${transparancy}%)`;
   const ocean = background.ocean.getScreenDimensions(player.pos, tileSize);
   ctx.fillRect(ocean.x, ocean.y, ocean.width, ocean.height);
 
@@ -370,7 +429,13 @@ function draw() {
 
   for (let key in sprites) sprites[key].checkFrameCount(frameRate);
 
-  console.log(`Draw Time: ${Date.now() - startTime}`)
+  // if tether is cut, darken overlay to black
+  if (tether.cut && overlayLast < 255) {
+    overlay.style.backgroundColor = `hsla(${0},${0}%,${0}%,${overlayLast}%`;
+    overlayLast += 30 / frameRate;
+  }
+
+  console.log(`Draw Time: ${Date.now() - startTime}`);
 }
 
 // HANDLE PLAYER INPUT -----------------------------------------------------
@@ -388,12 +453,14 @@ function toggleKeys(e, state = true) {
   if (e.key === "a" || e.key == "A") pressedKeys.a = state;
   if (e.key === "s" || e.key == "S") pressedKeys.s = state;
   if (e.key === "d" || e.key == "D") pressedKeys.d = state;
-  if (e.key === "t" && player.onGround)
+  if (e.key === "t" && player.onGround) {
+    player.welding = true;
     addTetherAnchor({
       x: player.pos.x + player.size.width / 2,
       y: player.pos.y + player.size.height / 2,
       z: player.pos.z,
     });
+  }
   if (e.key === " ") pressedKeys.space = state;
 }
 
@@ -406,27 +473,27 @@ function timeoutControls(ms) {
   pressedKeys.space = false;
   setTimeout(function () {
     acceptingInput = true;
+    player.welding = false;
   }, ms);
 }
 
 // HANDLE GAME LOOP -----------------------------------------------------
 
-let lastFrame = Date.now()
+let lastFrame = Date.now();
 function loop() {
-  const deltaTime = Date.now() - lastFrame
-  frameRate = 1000 / deltaTime
+  const deltaTime = Date.now() - lastFrame;
+  frameRate = 1000 / deltaTime;
 
-  update()
-  lastFrame = Date.now()
-  requestAnimationFrame(loop)
-  console.log(`Frame Rate: ${frameRate}`)
+  update();
+  lastFrame = Date.now();
+  requestAnimationFrame(loop);
+  console.log(`Frame Rate: ${frameRate}`);
 }
 
-requestAnimationFrame(loop)
-
+requestAnimationFrame(loop);
 
 function update() {
-  const startTime = Date.now()
+  const startTime = Date.now();
   //tileSize = (canvas.width + player.pos.y * 5) / 18;
   if (!inWater) {
     if (player.pos.y + player.size.height / 2 > 0) playerHitWater();
@@ -476,12 +543,10 @@ function update() {
     player.onGround = false;
   }
 
-  if (!player.onGround) {
-    if (player.velocity.y < -0.2 || player.velocity.y > 0.2)
-      player.velocity.y += gravity / frameRate;
-    else player.velocity.y += 0.1;
-    if (player.velocity.y > termVelocity) player.velocity.y = termVelocity;
-  }
+  if (player.velocity.y < -0.2 || player.velocity.y > 0.2)
+    player.velocity.y += gravity / frameRate;
+  else player.velocity.y += 0.1;
+  if (player.velocity.y > termVelocity) player.velocity.y = termVelocity;
 
   // test for collision
   const nextX = player.pos.x + player.velocity.x / frameRate;
@@ -489,7 +554,6 @@ function update() {
   const nextDepth = player.pos.z + player.velocity.z / frameRate;
 
   if (levels[player.nearestLevel].floorData) {
-    const lastState = player.onGround;
     player.onGround = false;
     let groundFloor = null;
     for (let floor of levels[player.nearestLevel].floorData) {
@@ -524,7 +588,6 @@ function update() {
         );
         player.onGround = collision && above;
         if (player.onGround && !groundFloor) groundFloor = floor;
-        if (collision && player.velocity.y < 0) player.velocity.y = 0;
       }
 
       let sideCollision = false;
@@ -566,17 +629,23 @@ function update() {
       }
 
       // if player is high enough, allow mantle
-      if (sideCollision && player.pos.y < floor.y) {
+      if (
+        sideCollision &&
+        player.pos.y < floor.y &&
+        player.pos.y + player.size.height > floor.y
+      ) {
         player.onGround = true;
         if (!groundFloor) groundFloor = floor;
       }
     }
 
     // if player hits ground, cancel velocity
-    if (lastState !== player.onGround && player.onGround) {
+    if (groundFloor) {
       player.pos.y = groundFloor.y - player.size.height;
       player.velocity.y = 0;
     }
+
+    console.log(player.onGround);
   } else {
     player.onGround = false;
   }
@@ -721,7 +790,7 @@ function update() {
   //update bubbles
   for (let bubg of player.bubbles) {
     //bubg.makeBubble()
-    bubg.updateBubbles();
+    if (bubg) bubg.updateBubbles();
   }
 
   if (cut) cutTether(indexCut);
@@ -729,5 +798,5 @@ function update() {
   // redraw
   draw();
 
-  console.log(`Update Time: ${Date.now() - startTime}`)
+  console.log(`Update Time: ${Date.now() - startTime}`);
 }

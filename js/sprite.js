@@ -13,7 +13,7 @@ class Sprite {
     this.frames = frames;
     this.spriteFps = sfps;
     this.currentFrame = 0;
-    this.frameCounter = 1;
+    this.lastFrame = 1;
   }
   getSpriteCropInfo() {
     return {
@@ -23,9 +23,11 @@ class Sprite {
       sheight: this.pixelSize.height,
     }
   }
-  checkFrameCount(frameRate) {
+  checkFrameCount() {
     //do frame updates :D
-    this.frameCounter = (this.frameCounter + 1) % Math.ceil(frameRate / this.spriteFps)
-    if (this.frameCounter === 0) this.currentFrame = (this.currentFrame + 1) % this.frames
+    if (Date.now() - this.lastFrame > 1000 / this.spriteFps) {
+      this.currentFrame = (this.currentFrame + 1) % this.frames
+      this.lastFrame = Date.now()
+    }
   }
 }
