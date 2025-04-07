@@ -2,15 +2,15 @@ const canvas = document.getElementById("game-screen");
 const ctx = canvas.getContext("2d");
 canvas.width = 1000; // 948
 canvas.height = 500; // 533
-const frameRate = 60;
+let frameRate = 30;
 const translate = {
-  x: canvas.width * 3 / 4,
+  x: (canvas.width * 3) / 4,
   y: canvas.height / 2,
 };
 
 let tileSize = Math.ceil(canvas.width / 18);
 
-let inWater = false
+let inWater = false;
 
 let gravity = 7;
 let termVelocity = 6;
@@ -48,54 +48,54 @@ const player = {
     y: 0,
     z: 0,
   },
+  nearestLevel: 0,
   onGround: false,
   mirrorSprite: true,
   sprites: {
     idle: null,
-    moving: new Sprite("./res/diverrun.png", 1, 1, 42, 42, 13, frameRate, 8),
+    moving: new Sprite("./res/diverrun.png", 1, 1, 42, 42, 13, 8),
     inAir: null,
     welding: null,
   },
   bubbles: [],
 };
 
-
 // MENUS AND STUFF -----------------------------------------------------
 
-const playMenu = document.getElementById("game-play-menu")
+const playMenu = document.getElementById("game-play-menu");
 
-const playButton = document.getElementById("btn-play")
+const playButton = document.getElementById("btn-play");
 playButton.addEventListener("click", function () {
-  
   // hide menu
-  playMenu.style.display = "none"
+  playMenu.style.display = "none";
 
   // pan camera
-  const titleCameraPanInterval = setInterval(function () {
-    if (translate.x > canvas.width / 2) translate.x -= (translate.x - (canvas.width / 2)) * 3 / frameRate
+  const CameraPanRightInterval = setInterval(function () {
+    if (translate.x > canvas.width / 2)
+      translate.x -= ((translate.x - canvas.width / 2) * 3) / frameRate;
     else {
-      translate.x = canvas.width / 2
-      clearInterval(titleCameraPanInterval)
+      translate.x = canvas.width / 2;
+      clearInterval(CameraPanRightInterval);
     }
-  }, 1000 / frameRate)
+  }, 1000 / frameRate);
 
   // shove player into water
   setTimeout(function () {
-    player.velocity.z -= 2
-  }, 1000)
+    player.velocity.z -= 2;
+  }, 1000);
   setTimeout(function () {
-    player.velocity.z = 0
-  }, 2500)
+    player.velocity.z = 0;
+  }, 2500);
 
   // let player play
   setTimeout(function () {
     acceptingInput = true;
-  }, 3000)
-})
+  }, 3000);
+});
 
 function playerHitWater() {
   inWater = true;
-  console.log("Water!")
+  console.log("Water!");
   gravity = 1.5;
   termVelocity = 2;
   player.bubbles[0] = new BubbleGenerator(player.pos, 0.4, frameRate, true, 2);
@@ -120,11 +120,14 @@ function addTetherAnchor(point, timeout = true) {
   if (timeout) timeoutControls(2000);
 }
 
-addTetherAnchor({
-  x: 32,
-  y: -1,
-  z: 2,
-}, false);
+addTetherAnchor(
+  {
+    x: 32,
+    y: -1,
+    z: 2,
+  },
+  false
+);
 
 // moves oldest flex point to tether and generates new one on player
 
@@ -165,26 +168,8 @@ function getScreenspacePoint(p) {
 
 // DRAWING -----------------------------------------------------
 
-const drawData = [];
-for (let level of levels) {
-  if (level.floorData) drawData.push(...level.floorData);
-  if (level.hazzardData) drawData.push(...level.hazzardData);
-}
-drawData.sort(function (a, b) {
-  return b.getZIndex() - a.getZIndex();
-});
-
 const sprites = {
-  bgHorizontal: new Sprite(
-    "./res/bghoriz.png",
-    5,
-    5,
-    120,
-    120,
-    2,
-    frameRate,
-    2
-  ),
+  bgHorizontal: new Sprite("./res/bghoriz.png", 5, 5, 120, 120, 2, 2),
 };
 
 function isOnScreen(x, y, w, h) {
@@ -199,7 +184,9 @@ function isOnScreen(x, y, w, h) {
 }
 
 function draw() {
-  console.log(player.pos.z)
+  const startTime = Date.now()
+
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
 
@@ -251,6 +238,16 @@ function draw() {
   }
 
   //draw level
+  const drawData = [];
+  const minLevelToDraw = Math.max(0, player.nearestLevel - 1);
+  const maxLevelToDraw = Math.min(levels.length - 1, player.nearestLevel + 1);
+  for (let i = minLevelToDraw; i <= maxLevelToDraw; i++) {
+    if (levels[i].floorData) drawData.push(...levels[i].floorData);
+    if (levels[i].hazzardData) drawData.push(...levels[i].hazzardData);
+  }
+  drawData.sort(function (a, b) {
+    return b.getZIndex() - a.getZIndex();
+  });
 
   let playerDrawn = false;
 
@@ -270,7 +267,7 @@ function draw() {
       let y = (tileSize / 3) * -(player.pos.z - 1);
 
       // correct for sprite size diff from hitbox
-      ctx.translate(-player.size.width * tileSize / 2, 0)
+      ctx.translate((-player.size.width * tileSize) / 2, 0);
       if (player.mirrorSprite) {
         ctx.scale(-1, 1);
         x -= tileSize;
@@ -287,7 +284,7 @@ function draw() {
         sprite.gameSize.width * tileSize,
         sprite.gameSize.height * tileSize
       );
-      sprite.checkFrameCount();
+      sprite.checkFrameCount(frameRate);
 
       ctx.restore();
 
@@ -371,7 +368,9 @@ function draw() {
     ctx.fillText(`DEPTH: ${(player.pos.y + 1).toFixed(0)}`, 15, 15);
   }
 
-  for (let key in sprites) sprites[key].checkFrameCount();
+  for (let key in sprites) sprites[key].checkFrameCount(frameRate);
+
+  console.log(`Draw Time: ${Date.now() - startTime}`)
 }
 
 // HANDLE PLAYER INPUT -----------------------------------------------------
@@ -412,29 +411,38 @@ function timeoutControls(ms) {
 
 // HANDLE GAME LOOP -----------------------------------------------------
 
-setInterval(update, 1000 / frameRate);
+let lastFrame = Date.now()
+function loop() {
+  const deltaTime = Date.now() - lastFrame
+  frameRate = 1000 / deltaTime
+
+  update()
+  lastFrame = Date.now()
+  requestAnimationFrame(loop)
+  console.log(`Frame Rate: ${frameRate}`)
+}
+
+requestAnimationFrame(loop)
+
 
 function update() {
+  const startTime = Date.now()
   //tileSize = (canvas.width + player.pos.y * 5) / 18;
   if (!inWater) {
-    if (player.pos.y + player.size.height / 2 > 0) playerHitWater()
-  } 
+    if (player.pos.y + player.size.height / 2 > 0) playerHitWater();
+  }
 
-  const nearestLevel = levels.find((level) => player.pos.y < level.endingY);
+  player.nearestLevel = levels.findIndex(
+    (level) => player.pos.y < level.endingY
+  );
 
   //handle side to side movement
   if (pressedKeys.a && !pressedKeys.d) {
-    player.velocity.x = Math.max(
-      -player.speed,
-      player.velocity.x - player.acceleration / frameRate
-    );
+    player.velocity.x = -player.speed;
     player.mirrorSprite = true;
   }
   if (pressedKeys.d && !pressedKeys.a) {
-    player.velocity.x = Math.min(
-      player.speed,
-      player.velocity.x + player.acceleration / frameRate
-    );
+    player.velocity.x = player.speed;
     player.mirrorSprite = false;
   }
 
@@ -451,10 +459,13 @@ function update() {
     );
 
   // if player is moving
-  if (player.bubbles[0] && (pressedKeys.a || pressedKeys.d || pressedKeys.w || pressedKeys.s)) {
+  if (
+    player.bubbles[0] &&
+    (pressedKeys.a || pressedKeys.d || pressedKeys.w || pressedKeys.s)
+  ) {
     player.bubbles[0].cycleSpeed = 1;
     player.bubbles[0].rate = 0.2;
-  } else if (player.bubbles[0]){
+  } else if (player.bubbles[0]) {
     player.bubbles[0].cycleSpeed = 2;
     player.bubbles[0].rate = 0.4;
   }
@@ -477,11 +488,11 @@ function update() {
   const nextY = player.pos.y + player.velocity.y / frameRate;
   const nextDepth = player.pos.z + player.velocity.z / frameRate;
 
-  if (nearestLevel.floorData) {
+  if (levels[player.nearestLevel].floorData) {
     const lastState = player.onGround;
     player.onGround = false;
     let groundFloor = null;
-    for (let floor of nearestLevel.floorData) {
+    for (let floor of levels[player.nearestLevel].floorData) {
       const box = {
         x: floor.x,
         y: floor.y,
@@ -490,6 +501,13 @@ function update() {
         height: floor.height,
         depth: floor.depth,
       };
+
+      // if dist is bigger than box, throw out
+      if (
+        dist(player.pos, box) >
+        Math.max(box.width, box.height, box.depth) + 3
+      )
+        continue;
 
       // check for ground || ceiling
       if (!player.onGround) {
@@ -598,6 +616,7 @@ function update() {
   let last;
   let cut = false;
   let indexCut;
+
   for (let i = tether.flexPoints.length - 1; i >= 0; i--) {
     let xDiff, yDiff, zDiff;
     if (!last) {
@@ -611,8 +630,8 @@ function update() {
     }
 
     // test collision for not movement
-    if (nearestLevel.floorData) {
-      for (let floor of nearestLevel.floorData) {
+    if (levels[player.nearestLevel].floorData) {
+      for (let floor of levels[player.nearestLevel].floorData) {
         const box = {
           x: floor.x,
           y: floor.y,
@@ -621,14 +640,18 @@ function update() {
           height: floor.height,
           depth: floor.depth,
         };
+
+        // again, if too far away, skip checks
+        if (
+          dist(tether.flexPoints[i], box) >
+          Math.max(box.width, box.height, box.depth) + 3
+        )
+          continue;
+
         // x collides
         if (
           isPointInBox(
-            {
-              x: tether.flexPoints[i].x + xDiff,
-              y: tether.flexPoints[i].y,
-              z: tether.flexPoints[i].z,
-            },
+            { ...tether.flexPoints[i], x: tether.flexPoints[i].x + xDiff },
             box
           )
         )
@@ -636,11 +659,7 @@ function update() {
         // y collides
         if (
           isPointInBox(
-            {
-              x: tether.flexPoints[i].x,
-              y: tether.flexPoints[i].y + yDiff,
-              z: tether.flexPoints[i].z,
-            },
+            { ...tether.flexPoints[i], y: tether.flexPoints[i].y + yDiff },
             box
           )
         ) {
@@ -672,19 +691,15 @@ function update() {
         // z collides
         if (
           isPointInBox(
-            {
-              x: tether.flexPoints[i].x,
-              y: tether.flexPoints[i].y,
-              z: tether.flexPoints[i].z + zDiff,
-            },
+            { ...tether.flexPoints[i], z: tether.flexPoints[i].z + yDiff },
             box
           )
         )
           zDiff = 0;
       }
     }
-    if (nearestLevel.hazzardData) {
-      for (let hazzard of nearestLevel.hazzardData) {
+    if (levels[player.nearestLevel].hazzardData) {
+      for (let hazzard of levels[player.nearestLevel].hazzardData) {
         if (isPointInBox(tether.flexPoints[i], hazzard)) {
           cut = true;
           indexCut = i;
@@ -713,4 +728,6 @@ function update() {
 
   // redraw
   draw();
+
+  console.log(`Update Time: ${Date.now() - startTime}`)
 }
