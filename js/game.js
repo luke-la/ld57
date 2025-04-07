@@ -1,10 +1,10 @@
 const canvas = document.getElementById("game-screen");
 const ctx = canvas.getContext("2d");
-canvas.width = 948;
-canvas.height = 533;
-
-const tileSize = Math.ceil(canvas.width / 20);
+canvas.width = 1000; // 948
+canvas.height = 500; // 533
 const frameRate = 120;
+let tileSize = Math.ceil(canvas.width / 18);
+
 const gravity = 1.5;
 const termVelocity = 2;
 const groundSlow = 0.0001;
@@ -25,12 +25,17 @@ const player = {
     y: -1, // +y moves down (same as screenspace)
     z: 1.5, // affects which layer of map you interact with
   },
+  center: {
+    x: 0,
+    y: 0,
+    z: 0
+  },
   size: {
     width: 1,
     height: 1,
   },
   speed: 2, // m/s
-  acceleration: 0.1,
+  acceleration: 20,
   velocity: {
     x: 0,
     y: 0,
@@ -39,19 +44,28 @@ const player = {
   onGround: false,
   mirrorSprite: true,
   sprites: {
+    idle: null,
     moving: new Sprite("./res/diverrun.png", 1, 1, 42, 42, 13, frameRate, 8),
+    inAir: null,
+    welding: null,
   },
+  bubbles: [],
 };
+
+player.bubbles[0] = new BubbleGenerator(player.pos, 0.4, frameRate, true, 2);
+
+// TETHER HANDLING -----------------------------------------------------
 
 const tether = {
   points: [],
   flexPoints: [],
-  fidelity: 8,
-  gap: 1.5,
-  flex: 0.7,
-  cut: false,
+  fidelity: 8, // how many points are flexible
+  gap: 1.5, // gap in game space before a new flex point is added
+  flex: 0.7, // lower numbers means a quicker falloff of player affect on the tether
+  cut: false, // this one is obvious
 };
 
+// adds all flex points to tether and generate new ones
 function addTetherAnchor(point) {
   tether.points.push(...tether.flexPoints, point);
   tether.flexPoints.length = 0;
@@ -65,6 +79,8 @@ function addTetherAnchor(point) {
   timeoutControls(1000);
 }
 
+// moves oldest flex point to tether and generates new one on player
+
 function addControPoint() {
   tether.flexPoints.reverse();
   tether.points.push(tether.flexPoints.pop());
@@ -76,13 +92,14 @@ function addControPoint() {
   });
 }
 
+// again obvious
 function cutTether(index) {
   tether.cut = true;
   const removedPoints = tether.flexPoints.splice(0, index);
   tether.points.push(...removedPoints);
-  console.log(removedPoints);
-  console.log(tether.points);
+  
   tether.flex = 1;
+  player.bubbles[1] = new BubbleGenerator(tether.flexPoints[0], 0.05, frameRate, false)
 }
 
 addTetherAnchor({
@@ -91,14 +108,15 @@ addTetherAnchor({
   z: player.pos.z,
 });
 
-function getScreenspaceTether(p) {
+function getScreenspacePoint(p) {
   return {
     x: (p.x - player.pos.x) * tileSize,
     y: (p.y - player.pos.y) * tileSize + (tileSize / 3) * -(p.z - 1),
   };
 }
 
-// HANDLE DRAWING ENVIRONMENT TO THE SCREEN
+// DRAWING -----------------------------------------------------
+
 const drawData = [];
 for (let level of levels)
   drawData.push(...level.floorData, ...level.hazzardData);
@@ -112,14 +130,15 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
 
-  ctx.fillStyle = "black";
-  //ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "lightblue";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.translate(
     canvas.width / 2 - (player.size.width * tileSize) / 2,
     canvas.height / 2 - (player.size.height * tileSize) / 2
   );
 
   //draw background
+
   for (let bg of background.rigData) {
     ctx.fillStyle = "lightGrey";
     const rect = bg.getScreenDimensions(player.pos, tileSize);
@@ -139,17 +158,17 @@ function draw() {
         player.size.width * tileSize,
         player.size.height * tileSize
       );*/
-      ctx.save()
+      ctx.save();
 
-      const sprite = player.sprites.moving
-      let x = 0
-      let y = (tileSize / 3) * -(player.pos.z - 1)
+      const sprite = player.sprites.moving;
+      let x = 0;
+      let y = (tileSize / 3) * -(player.pos.z - 1);
 
       if (player.mirrorSprite) {
-        ctx.scale(-1, 1)
-        x -= tileSize
+        ctx.scale(-1, 1);
+        x -= tileSize;
       }
-      const cropInfo = sprite.getSpriteCropInfo()
+      const cropInfo = sprite.getSpriteCropInfo();
       ctx.drawImage(
         sprite.image,
         cropInfo.sx,
@@ -159,14 +178,10 @@ function draw() {
         x,
         y,
         sprite.gameSize.width * tileSize,
-        sprite.gameSize.height * tileSize,
+        sprite.gameSize.height * tileSize
       );
-      /*ctx.drawImage(
-        player.sprites.moving.image,
-        0,
-        (tileSize / 3) * -(player.pos.z - 1)
-      );*/
-      ctx.restore()
+      
+      ctx.restore();
 
       playerDrawn = true;
     }
@@ -187,34 +202,47 @@ function draw() {
     );
   }
 
+  // draw tether
   ctx.lineWidth = 5;
   ctx.strokeStyle = "black";
   ctx.beginPath();
-  const start = getScreenspaceTether(tether.points[0]);
+  const start = getScreenspacePoint(tether.points[0]);
   ctx.moveTo(start.x, start.y);
   for (let i = 0; i < tether.points.length; i++) {
-    const point = getScreenspaceTether(tether.points[i]);
+    const point = getScreenspacePoint(tether.points[i]);
     ctx.lineTo(point.x, point.y);
   }
   if (tether.cut) {
     ctx.stroke();
-    const startFlex = getScreenspaceTether(tether.points[0]);
+    const startFlex = getScreenspacePoint(tether.points[0]);
     ctx.beginPath(startFlex.x, startFlex.y);
   }
   for (let i = 0; i < tether.flexPoints.length; i++) {
-    const point = getScreenspaceTether(tether.flexPoints[i]);
+    const point = getScreenspacePoint(tether.flexPoints[i]);
     ctx.lineTo(point.x, point.y);
   }
-  /*for (let i = 0; i < tether.flexPoints.length; i++) {
-    const point = getScreenspaceTether(tether.flexPoints[i]);
-    ctx.lineTo(point.x, point.y);
+  for (let i = 0; i < tether.flexPoints.length; i++) {
+    const point = getScreenspacePoint(tether.flexPoints[i]);
+    //ctx.lineTo(point.x, point.y);
     ctx.fillRect(point.x, point.y, tileSize / 6, tileSize / 6);
-  }*/
+  }
   ctx.lineTo(
     (player.size.width * tileSize) / 2,
     (tileSize / 3) * -(player.pos.z - 2)
   );
   ctx.stroke();
+
+  // draw bubbles
+  const bubbles = [];
+  for (let bubg of player.bubbles) {
+    bubbles.push(...bubg.bubbles);
+  }
+  ctx.fillStyle = "white";
+  for (let b of bubbles) {
+    const pos = getScreenspacePoint(b);
+    ctx.fillRect(pos.x, pos.y, b.size * tileSize / 16, b.size * tileSize / 16);
+  }
+  // draw water
 
   const lightness = Math.max(0, 100 - player.pos.y);
   ctx.fillStyle = `rgba(${lightness}, ${lightness}, 255, 0.5)`;
@@ -222,6 +250,14 @@ function draw() {
   ctx.fillRect(ocean.x, ocean.y, ocean.width, ocean.height);
 
   ctx.restore();
+
+  ctx.font = "bold 20px monospace";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "black";
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
+  ctx.strokeText(`DEPTH: ${(player.pos.y + 1).toFixed(0)}`, 15, 15);
+  ctx.fillText(`DEPTH: ${(player.pos.y + 1).toFixed(0)}`, 15, 15);
 }
 
 // HANDLE PLAYER INPUT
@@ -265,6 +301,8 @@ function timeoutControls(ms) {
 setInterval(update, 1000 / frameRate);
 
 function update() {
+  tileSize = (canvas.width + player.pos.y * 5) / 18;
+
   const nearestLevel = levels.find(
     (level) => player.pos.y > level.startingY && player.pos.y < level.endingY
   );
@@ -273,14 +311,14 @@ function update() {
   if (pressedKeys.a && !pressedKeys.d) {
     player.velocity.x = Math.max(
       -player.speed,
-      player.velocity.x - player.acceleration
+      player.velocity.x - player.acceleration / frameRate
     );
     player.mirrorSprite = true;
   }
   if (pressedKeys.d && !pressedKeys.a) {
     player.velocity.x = Math.min(
       player.speed,
-      player.velocity.x + player.acceleration
+      player.velocity.x + player.acceleration / frameRate
     );
     player.mirrorSprite = false;
   }
@@ -296,6 +334,16 @@ function update() {
       -player.speed,
       player.velocity.z - player.acceleration
     );
+
+  // if player is moving
+  if (pressedKeys.a || pressedKeys.d || pressedKeys.w || pressedKeys.s) {
+    player.bubbles[0].cycleSpeed = 1
+    player.bubbles[0].rate = 0.2
+  } else {
+    player.bubbles[0].cycleSpeed = 2
+    player.bubbles[0].rate = 0.4
+  }
+
 
   // handle jumping and falling
   if (pressedKeys.space && player.onGround) {
@@ -413,6 +461,9 @@ function update() {
   player.pos.x += player.velocity.x / frameRate;
   player.pos.y += player.velocity.y / frameRate;
   player.pos.z += player.velocity.z / frameRate;
+  player.center.x = player.pos.x - player.size.width / 2
+  player.center.y = player.pos.y - player.size.height / 2
+  player.center.z = player.pos.z
 
   // add tether control point if needed
   const lastFlexPoint = tether.flexPoints[tether.flexPoints.length - 2];
@@ -512,6 +563,13 @@ function update() {
     tether.flexPoints[i].y += yDiff;
     tether.flexPoints[i].z += zDiff;
   }
+
+  //update bubbles
+  for (let bubg of player.bubbles) {
+    //bubg.makeBubble()
+    bubg.updateBubbles();
+  }
+
   if (cut) cutTether(indexCut);
 
   // redraw
