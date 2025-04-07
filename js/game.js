@@ -23,14 +23,14 @@ const player = {
   pos: {
     x: 31, // in meters
     y: -1, // +y moves down (same as screenspace)
-    depth: 1.5, // affects which layer of map you interact with
+    z: 1.5, // affects which layer of map you interact with
   },
   size: {
     width: 1,
     height: 1,
   },
   speed: 2, // m/s
-  acceleration: 0.2,
+  acceleration: 0.1,
   velocity: {
     x: 0,
     y: 0,
@@ -43,41 +43,51 @@ const player = {
 const tether = {
   points: [],
   flexPoints: [],
-  fidelity: 5,
+  fidelity: 8,
   gap: 1.5,
-  flex: 0.6
-}
+  flex: 0.7,
+  cut: false
+};
 
-function addTether() {
-  tether.points.push(...tether.flexPoints);
-  tether.points.push({
-    x: player.pos.x,
-    y: player.pos.y + player.size.height / 2,
-    z: player.pos.depth,
-  });
+function addTetherAnchor(point) {
+  tether.points.push(...tether.flexPoints, point);
   tether.flexPoints.length = 0;
   for (let i = 0; i < tether.fidelity; i++) {
     tether.flexPoints.push({
-      x: player.pos.x,
+      x: player.pos.x + player.size.width / 2,
       y: player.pos.y + player.size.height / 2,
-      z: player.pos.depth,
-    })
+      z: player.pos.z,
+    });
   }
   timeoutControls(1000);
 }
 
 function addControPoint() {
-  tether.flexPoints.reverse()
-  tether.points.push(tether.flexPoints.pop())
-  tether.flexPoints.reverse()
+  tether.flexPoints.reverse();
+  tether.points.push(tether.flexPoints.pop());
+  tether.flexPoints.reverse();
   tether.flexPoints.push({
     x: player.pos.x + player.size.width / 2,
     y: player.pos.y + player.size.height / 2,
-    z: player.pos.depth,
-  })
+    z: player.pos.z,
+  });
 }
 
-addTether();
+function cutTether(index) {
+  tether.cut = true;
+  const removedPoints = tether.flexPoints.splice(0, index)
+  tether.points.push(...removedPoints)
+  console.log(removedPoints)
+  console.log(tether.points)
+  tether.flex = 1
+}
+
+
+addTetherAnchor({
+  x: player.pos.x + player.size.width / 2,
+  y: player.pos.y + player.size.height / 2,
+  z: player.pos.z,
+});
 
 function getScreenspaceTether(p) {
   return {
@@ -87,8 +97,9 @@ function getScreenspaceTether(p) {
 }
 
 // HANDLE DRAWING ENVIRONMENT TO THE SCREEN
-const drawData = []
-for (let level of levels) drawData.push(...level.floorData, ...level.hazzardData)
+const drawData = [];
+for (let level of levels)
+  drawData.push(...level.floorData, ...level.hazzardData);
 drawData.sort(function (a, b) {
   return b.getZIndex() - a.getZIndex();
 });
@@ -102,8 +113,8 @@ function draw() {
   ctx.fillStyle = "black";
   //ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.translate(
-    canvas.width / 2 - player.size.width * tileSize / 2,
-    canvas.height / 2 - player.size.height * tileSize / 2
+    canvas.width / 2 - (player.size.width * tileSize) / 2,
+    canvas.height / 2 - (player.size.height * tileSize) / 2
   );
 
   //draw background
@@ -114,17 +125,15 @@ function draw() {
   }
 
   //draw level
-  
-  
 
   let playerDrawn = false;
 
   for (let d of drawData) {
-    if (d.getZIndex() < player.pos.depth && !playerDrawn) {
+    if (d.getZIndex() < player.pos.z && !playerDrawn) {
       ctx.fillStyle = "blue";
       ctx.fillRect(
         0,
-        (tileSize / 3) * -(player.pos.depth - 1),
+        (tileSize / 3) * -(player.pos.z - 1),
         player.size.width * tileSize,
         player.size.height * tileSize
       );
@@ -132,28 +141,49 @@ function draw() {
       playerDrawn = true;
     }
 
-    if (d.hazzardous) ctx.fillStyle = "red"
+    if (d.hazzardous) ctx.fillStyle = "red";
     else ctx.fillStyle = "gray";
     const topRect = d.getScreenDimensionsTop(player.pos, tileSize);
     ctx.fillRect(topRect.x, topRect.y, topRect.width + 1, topRect.height + 1);
 
-    if (d.hazzardous) ctx.fillStyle = "darkred"
+    if (d.hazzardous) ctx.fillStyle = "darkred";
     else ctx.fillStyle = "black";
     const sideRect = d.getScreenDimensionsSide(player.pos, tileSize);
-    ctx.fillRect(sideRect.x, sideRect.y, sideRect.width + 1, sideRect.height + 1);
+    ctx.fillRect(
+      sideRect.x,
+      sideRect.y,
+      sideRect.width + 1,
+      sideRect.height + 1
+    );
   }
 
   ctx.lineWidth = 5;
-  ctx.strokeStyle = "blue";
+  ctx.strokeStyle = "black";
   ctx.beginPath();
   const start = getScreenspaceTether(tether.points[0]);
   ctx.moveTo(start.x, start.y);
-  const drawnPoints = [...tether.points, ...tether.flexPoints]
-  for (let i = 0; i < drawnPoints.length; i++) {
-    const point = getScreenspaceTether(drawnPoints[i]);
+  for (let i = 0; i < tether.points.length; i++) {
+    const point = getScreenspaceTether(tether.points[i]);
     ctx.lineTo(point.x, point.y);
   }
-  ctx.lineTo(player.size.width * tileSize / 2, (tileSize / 3) * -(player.pos.depth - 2))
+  if (tether.cut) {
+    ctx.stroke();
+    const startFlex = getScreenspaceTether(tether.points[0]);
+    ctx.beginPath(startFlex.x, startFlex.y);
+  }
+  for (let i = 0; i < tether.flexPoints.length; i++) {
+    const point = getScreenspaceTether(tether.flexPoints[i]);
+    ctx.lineTo(point.x, point.y);
+  }
+  /*for (let i = 0; i < tether.flexPoints.length; i++) {
+    const point = getScreenspaceTether(tether.flexPoints[i]);
+    ctx.lineTo(point.x, point.y);
+    ctx.fillRect(point.x, point.y, tileSize / 6, tileSize / 6);
+  }*/
+  ctx.lineTo(
+    (player.size.width * tileSize) / 2,
+    (tileSize / 3) * -(player.pos.z - 2)
+  );
   ctx.stroke();
 
   const lightness = Math.max(0, 100 - player.pos.y);
@@ -179,7 +209,11 @@ function toggleKeys(e, state = true) {
   if (e.key === "a" || e.key == "A") pressedKeys.a = state;
   if (e.key === "s" || e.key == "S") pressedKeys.s = state;
   if (e.key === "d" || e.key == "D") pressedKeys.d = state;
-  if (e.key === "t" && player.onGround) addTether();
+  if (e.key === "t" && player.onGround) addTetherAnchor({
+    x: player.pos.x + player.size.width / 2,
+    y: player.pos.y + player.size.height / 2,
+    z: player.pos.z,
+  });
   if (e.key === " ") pressedKeys.space = state;
 }
 
@@ -245,12 +279,12 @@ function update() {
   // test for collision
   const nextX = player.pos.x + player.velocity.x / frameRate;
   const nextY = player.pos.y + player.velocity.y / frameRate;
-  const nextDepth = player.pos.depth + player.velocity.z / frameRate;
+  const nextDepth = player.pos.z + player.velocity.z / frameRate;
 
   if (nearestLevel) {
     const lastState = player.onGround;
     player.onGround = false;
-    let groundFloor = null
+    let groundFloor = null;
     for (let floor of nearestLevel.floorData) {
       const box = {
         x: floor.x,
@@ -263,23 +297,23 @@ function update() {
 
       // check for ground || ceiling
       if (!player.onGround) {
-        const above = (player.pos.y + player.size.height <= box.y)
+        const above = player.pos.y + player.size.height <= box.y;
         const collision = isPlaneInBox(
           {
             x: player.pos.x,
             y: nextY,
             width: player.size.width,
             height: player.size.height,
-            z: player.pos.depth,
+            z: player.pos.z,
           },
           box
         );
-        player.onGround = collision && above
-        if (player.onGround && !groundFloor) groundFloor = floor
-        if (collision && player.velocity.y < 0) player.velocity.y = 0
+        player.onGround = collision && above;
+        if (player.onGround && !groundFloor) groundFloor = floor;
+        if (collision && player.velocity.y < 0) player.velocity.y = 0;
       }
 
-      let sideCollision = false
+      let sideCollision = false;
 
       // check for left and right
       if (player.velocity.x != 0) {
@@ -289,13 +323,13 @@ function update() {
             y: player.pos.y,
             width: player.size.width,
             height: player.size.height,
-            z: player.pos.depth,
+            z: player.pos.z,
           },
           box
         );
         if (collision) {
-          player.velocity.x = 0
-          sideCollision = collision
+          player.velocity.x = 0;
+          sideCollision = collision;
         }
       }
 
@@ -312,15 +346,15 @@ function update() {
           box
         );
         if (collision) {
-          player.velocity.z = 0
-          sideCollision = collision
+          player.velocity.z = 0;
+          sideCollision = collision;
         }
       }
 
       // if player is high enough, allow mantle
       if (sideCollision && player.pos.y < floor.y) {
-        player.onGround = true
-        if (!groundFloor) groundFloor = floor
+        player.onGround = true;
+        if (!groundFloor) groundFloor = floor;
       }
     }
 
@@ -329,55 +363,118 @@ function update() {
       player.pos.y = groundFloor.y - player.size.height;
       player.velocity.y = 0;
     }
-    
   } else {
     player.onGround = false;
   }
 
   // handle friction
-  let slow = (player.onGround) ? groundSlow : waterSlow
+  let slow = player.onGround ? groundSlow : waterSlow;
   if (player.velocity.x !== 0)
-    player.velocity.x *= Math.pow(slow, 1 / frameRate)
+    player.velocity.x *= Math.pow(slow, 1 / frameRate);
   if (player.velocity.z !== 0) {
-    player.velocity.z *= Math.pow(slow, 1 / frameRate)
+    player.velocity.z *= Math.pow(slow, 1 / frameRate);
   }
 
   // move player
   player.pos.x += player.velocity.x / frameRate;
   player.pos.y += player.velocity.y / frameRate;
-  player.pos.depth += player.velocity.z / frameRate;
+  player.pos.z += player.velocity.z / frameRate;
 
   // add tether control point if needed
-  const control = tether.flexPoints[tether.flexPoints.length - 1]
-  const dist = Math.sqrt(Math.pow((player.pos.x - control.x),2) +
-  Math.pow((player.pos.y - control.y),2) +
-  Math.pow((player.pos.depth - control.z),2))
-  if (dist > tether.gap) addControPoint()
+  const lastFlexPoint = tether.flexPoints[tether.flexPoints.length - 2];
+  const playerFlexPoint = {
+    x: player.pos.x + player.size.width / 2,
+    y: player.pos.y + player.size.height / 2,
+    z: player.pos.z
+  }
+  if (lastFlexPoint && playerFlexPoint && dist(playerFlexPoint, lastFlexPoint) > tether.gap && !tether.cut) addControPoint();
 
   // move tether control points
-  let last
-  for (let i = tether.flexPoints.length - 1; i > 0; i--) {
-    let xDiff, yDiff, zDiff
+  let last;
+  let cut = false;
+  let indexCut;
+  for (let i = tether.flexPoints.length - 1; i >= 0; i--) {
+    let xDiff, yDiff, zDiff;
     if (!last) {
       xDiff = (player.velocity.x / frameRate) * tether.flex;
       yDiff = (player.velocity.y / frameRate) * tether.flex;
       zDiff = (player.velocity.z / frameRate) * tether.flex;
-    }
-    else {
+    } else {
       xDiff = last.x * tether.flex;
       yDiff = last.y * tether.flex;
       zDiff = last.z * tether.flex;
     }
 
-    tether.flexPoints[i].x += xDiff
-    tether.flexPoints[i].y += yDiff
-    tether.flexPoints[i].z += zDiff
+    // test collision for not movement
+    if (nearestLevel) {
+      for (let floor of nearestLevel.floorData) {
+        const box = {
+          x: floor.x,
+          y: floor.y,
+          z: floor.z,
+          width: floor.width,
+          height: floor.height,
+          depth: floor.depth,
+        };
+        // x collides
+        if (
+          isPointInBox(
+            {
+              x: tether.flexPoints[i].x + xDiff,
+              y: tether.flexPoints[i].y,
+              z: tether.flexPoints[i].z,
+            },
+            box
+          )
+        )
+          xDiff = 0;
+        // y collides
+        if (
+          isPointInBox(
+            {
+              x: tether.flexPoints[i].x,
+              y: tether.flexPoints[i].y + yDiff,
+              z: tether.flexPoints[i].z,
+            },
+            box
+          )
+        )
+          yDiff = 0;
+        // z collides
+        if (
+          isPointInBox(
+            {
+              x: tether.flexPoints[i].x,
+              y: tether.flexPoints[i].y,
+              z: tether.flexPoints[i].z + zDiff,
+            },
+            box
+          )
+        )
+          zDiff = 0;
+      }
+
+      for (let hazzard of nearestLevel.hazzardData) {
+        if (
+          isPointInBox(tether.flexPoints[i], hazzard)
+        ) {
+          cut = true
+          indexCut = i
+        }
+      }
+    }
+
     last = {
       x: xDiff,
       y: yDiff,
       z: zDiff,
-    }
+    };
+
+    tether.flexPoints[i].x += xDiff;
+    tether.flexPoints[i].y += yDiff;
+    tether.flexPoints[i].z += zDiff;
   }
+  if (cut) cutTether(indexCut)
 
   // redraw
   draw();
