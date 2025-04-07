@@ -17,15 +17,16 @@ class Sprite {
     this.frameCounter = 1;
   }
   getSpriteCropInfo() {
-    //do frame updates :D
-    this.frameCounter = (this.frameCounter + 1) % Math.floor(this.fps / this.spriteFps)
-    if (this.frameCounter === 0) this.currentFrame = (this.currentFrame + 1) % this.frames
-
     return {
       sx: this.currentFrame * this.pixelSize.width,
       sy: 0,
       swidth: this.pixelSize.width,
       sheight: this.pixelSize.height,
     }
+  }
+  checkFrameCount() {
+    //do frame updates :D
+    this.frameCounter = (this.frameCounter + 1) % Math.floor(this.fps / this.spriteFps)
+    if (this.frameCounter === 0) this.currentFrame = (this.currentFrame + 1) % this.frames
   }
 }

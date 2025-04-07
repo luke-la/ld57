@@ -28,10 +28,10 @@ const player = {
   center: {
     x: 0,
     y: 0,
-    z: 0
+    z: 0,
   },
   size: {
-    width: 1,
+    width: 0.5,
     height: 1,
   },
   speed: 2, // m/s
@@ -60,31 +60,27 @@ const tether = {
   points: [],
   flexPoints: [],
   fidelity: 8, // how many points are flexible
-  gap: 1.5, // gap in game space before a new flex point is added
+  gap: 0.64, // gap in game space before a new flex point is added
   flex: 0.7, // lower numbers means a quicker falloff of player affect on the tether
   cut: false, // this one is obvious
 };
 
-// adds all flex points to tether and generate new ones
+// adds all flex points to tether and removes them
 function addTetherAnchor(point) {
   tether.points.push(...tether.flexPoints, point);
   tether.flexPoints.length = 0;
-  for (let i = 0; i < tether.fidelity; i++) {
-    tether.flexPoints.push({
-      x: player.pos.x + player.size.width / 2,
-      y: player.pos.y + player.size.height / 2,
-      z: player.pos.z,
-    });
-  }
+  addControPoint();
   timeoutControls(1000);
 }
 
 // moves oldest flex point to tether and generates new one on player
 
 function addControPoint() {
-  tether.flexPoints.reverse();
-  tether.points.push(tether.flexPoints.pop());
-  tether.flexPoints.reverse();
+  if (tether.flexPoints.length == tether.fidelity) {
+    tether.flexPoints.reverse();
+    tether.points.push(tether.flexPoints.pop());
+    tether.flexPoints.reverse();
+  }
   tether.flexPoints.push({
     x: player.pos.x + player.size.width / 2,
     y: player.pos.y + player.size.height / 2,
@@ -97,9 +93,14 @@ function cutTether(index) {
   tether.cut = true;
   const removedPoints = tether.flexPoints.splice(0, index);
   tether.points.push(...removedPoints);
-  
+
   tether.flex = 1;
-  player.bubbles[1] = new BubbleGenerator(tether.flexPoints[0], 0.05, frameRate, false)
+  player.bubbles[1] = new BubbleGenerator(
+    tether.flexPoints[0],
+    0.05,
+    frameRate,
+    false
+  );
 }
 
 addTetherAnchor({
@@ -124,6 +125,35 @@ drawData.sort(function (a, b) {
   return b.getZIndex() - a.getZIndex();
 });
 
+const sprites = {
+  bgHorizontal: new Sprite(
+    "./res/bghoriz.png",
+    5,
+    5,
+    120,
+    120,
+    2,
+    frameRate,
+    2
+  ),
+};
+
+const translate = {
+  x: canvas.width / 2,
+  y: canvas.height / 2,
+};
+
+function isOnScreen(x, y, w, h) {
+  if (
+    x > translate.x ||
+    x + w < -translate.x ||
+    y > translate.y ||
+    y + h < -translate.y
+  )
+    return false;
+  else return true;
+}
+
 draw();
 
 function draw() {
@@ -132,17 +162,60 @@ function draw() {
 
   ctx.fillStyle = "lightblue";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.translate(
-    canvas.width / 2 - (player.size.width * tileSize) / 2,
-    canvas.height / 2 - (player.size.height * tileSize) / 2
-  );
+  ctx.translate(translate.x, translate.y);
 
   //draw background
 
   for (let bg of background.rigData) {
     ctx.fillStyle = "lightGrey";
-    const rect = bg.getScreenDimensions(player.pos, tileSize);
-    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    let bgSprite;
+    if (bg.width > bg.height) {
+      bgSprite = sprites.bgHorizontal;
+    }
+    if (bgSprite) {
+      const cropInfo = bgSprite.getSpriteCropInfo();
+      for (let i = 0; i < bg.width / bgSprite.gameSize.width; i++) {
+        for (let j = 0; j < bg.height / bgSprite.gameSize.height; j++) {
+          const start = bg.getScreenDimensions(player.pos, tileSize);
+          start.x += i * bgSprite.gameSize.width * tileSize;
+          start.y += j * bgSprite.gameSize.width * tileSize;
+          if (
+            isOnScreen(
+              start.x,
+              start.y,
+              bgSprite.gameSize.width * tileSize,
+              bgSprite.gameSize.height * tileSize
+            )
+          ) {
+            ctx.drawImage(
+              bgSprite.image,
+              cropInfo.sx,
+              cropInfo.sy,
+              cropInfo.swidth,
+              cropInfo.sheight,
+              start.x,
+              start.y,
+              bgSprite.gameSize.width * tileSize,
+              bgSprite.gameSize.height * tileSize
+            );
+          }
+        }
+      }
+      /*ctx.drawImage(
+        bgSprite.image,
+        cropInfo.sx,
+        cropInfo.sy,
+        cropInfo.swidth,
+        cropInfo.sheight,
+        startPoint.x,
+        startPoint.y,
+        bgSprite.gameSize.width * tileSize,
+        bgSprite.gameSize.height * tileSize
+      );*/
+    } else {
+      const rect = bg.getScreenDimensions(player.pos, tileSize);
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    }
   }
 
   //draw level
@@ -180,7 +253,8 @@ function draw() {
         sprite.gameSize.width * tileSize,
         sprite.gameSize.height * tileSize
       );
-      
+      sprite.checkFrameCount();
+
       ctx.restore();
 
       playerDrawn = true;
@@ -240,7 +314,12 @@ function draw() {
   ctx.fillStyle = "white";
   for (let b of bubbles) {
     const pos = getScreenspacePoint(b);
-    ctx.fillRect(pos.x, pos.y, b.size * tileSize / 16, b.size * tileSize / 16);
+    ctx.fillRect(
+      pos.x,
+      pos.y,
+      (b.size * tileSize) / 16,
+      (b.size * tileSize) / 16
+    );
   }
   // draw water
 
@@ -258,6 +337,8 @@ function draw() {
   ctx.lineWidth = 2;
   ctx.strokeText(`DEPTH: ${(player.pos.y + 1).toFixed(0)}`, 15, 15);
   ctx.fillText(`DEPTH: ${(player.pos.y + 1).toFixed(0)}`, 15, 15);
+
+  for (let key in sprites) sprites[key].checkFrameCount();
 }
 
 // HANDLE PLAYER INPUT
@@ -301,7 +382,7 @@ function timeoutControls(ms) {
 setInterval(update, 1000 / frameRate);
 
 function update() {
-  tileSize = (canvas.width + player.pos.y * 5) / 18;
+  //tileSize = (canvas.width + player.pos.y * 5) / 18;
 
   const nearestLevel = levels.find(
     (level) => player.pos.y > level.startingY && player.pos.y < level.endingY
@@ -337,13 +418,12 @@ function update() {
 
   // if player is moving
   if (pressedKeys.a || pressedKeys.d || pressedKeys.w || pressedKeys.s) {
-    player.bubbles[0].cycleSpeed = 1
-    player.bubbles[0].rate = 0.2
+    player.bubbles[0].cycleSpeed = 1;
+    player.bubbles[0].rate = 0.2;
   } else {
-    player.bubbles[0].cycleSpeed = 2
-    player.bubbles[0].rate = 0.4
+    player.bubbles[0].cycleSpeed = 2;
+    player.bubbles[0].rate = 0.4;
   }
-
 
   // handle jumping and falling
   if (pressedKeys.space && player.onGround) {
@@ -461,12 +541,12 @@ function update() {
   player.pos.x += player.velocity.x / frameRate;
   player.pos.y += player.velocity.y / frameRate;
   player.pos.z += player.velocity.z / frameRate;
-  player.center.x = player.pos.x - player.size.width / 2
-  player.center.y = player.pos.y - player.size.height / 2
-  player.center.z = player.pos.z
+  player.center.x = player.pos.x - player.size.width / 2;
+  player.center.y = player.pos.y - player.size.height / 2;
+  player.center.z = player.pos.z;
 
   // add tether control point if needed
-  const lastFlexPoint = tether.flexPoints[tether.flexPoints.length - 2];
+  const lastFlexPoint = tether.flexPoints[tether.flexPoints.length - 1];
   const playerFlexPoint = {
     x: player.pos.x + player.size.width / 2,
     y: player.pos.y + player.size.height / 2,
