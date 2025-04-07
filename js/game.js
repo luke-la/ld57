@@ -3,7 +3,7 @@ const ctx = canvas.getContext("2d");
 canvas.width = 948;
 canvas.height = 533;
 
-const tileSize = Math.ceil(canvas.width / 24);
+const tileSize = Math.ceil(canvas.width / 20);
 const frameRate = 120;
 const gravity = 1.5;
 const termVelocity = 2;
@@ -37,7 +37,10 @@ const player = {
     z: 0,
   },
   onGround: false,
-  status: "falling",
+  mirrorSprite: true,
+  sprites: {
+    moving: new Sprite("./res/diverrun.png", 1, 1, 42, 42, 13, frameRate, 8),
+  },
 };
 
 const tether = {
@@ -46,7 +49,7 @@ const tether = {
   fidelity: 8,
   gap: 1.5,
   flex: 0.7,
-  cut: false
+  cut: false,
 };
 
 function addTetherAnchor(point) {
@@ -75,13 +78,12 @@ function addControPoint() {
 
 function cutTether(index) {
   tether.cut = true;
-  const removedPoints = tether.flexPoints.splice(0, index)
-  tether.points.push(...removedPoints)
-  console.log(removedPoints)
-  console.log(tether.points)
-  tether.flex = 1
+  const removedPoints = tether.flexPoints.splice(0, index);
+  tether.points.push(...removedPoints);
+  console.log(removedPoints);
+  console.log(tether.points);
+  tether.flex = 1;
 }
-
 
 addTetherAnchor({
   x: player.pos.x + player.size.width / 2,
@@ -130,13 +132,41 @@ function draw() {
 
   for (let d of drawData) {
     if (d.getZIndex() < player.pos.z && !playerDrawn) {
-      ctx.fillStyle = "blue";
+      /*ctx.fillStyle = "blue";
       ctx.fillRect(
         0,
         (tileSize / 3) * -(player.pos.z - 1),
         player.size.width * tileSize,
         player.size.height * tileSize
+      );*/
+      ctx.save()
+
+      const sprite = player.sprites.moving
+      let x = 0
+      let y = (tileSize / 3) * -(player.pos.z - 1)
+
+      if (player.mirrorSprite) {
+        ctx.scale(-1, 1)
+        x -= tileSize
+      }
+      const cropInfo = sprite.getSpriteCropInfo()
+      ctx.drawImage(
+        sprite.image,
+        cropInfo.sx,
+        cropInfo.sy,
+        cropInfo.swidth,
+        cropInfo.sheight,
+        x,
+        y,
+        sprite.gameSize.width * tileSize,
+        sprite.gameSize.height * tileSize,
       );
+      /*ctx.drawImage(
+        player.sprites.moving.image,
+        0,
+        (tileSize / 3) * -(player.pos.z - 1)
+      );*/
+      ctx.restore()
 
       playerDrawn = true;
     }
@@ -209,11 +239,12 @@ function toggleKeys(e, state = true) {
   if (e.key === "a" || e.key == "A") pressedKeys.a = state;
   if (e.key === "s" || e.key == "S") pressedKeys.s = state;
   if (e.key === "d" || e.key == "D") pressedKeys.d = state;
-  if (e.key === "t" && player.onGround) addTetherAnchor({
-    x: player.pos.x + player.size.width / 2,
-    y: player.pos.y + player.size.height / 2,
-    z: player.pos.z,
-  });
+  if (e.key === "t" && player.onGround)
+    addTetherAnchor({
+      x: player.pos.x + player.size.width / 2,
+      y: player.pos.y + player.size.height / 2,
+      z: player.pos.z,
+    });
   if (e.key === " ") pressedKeys.space = state;
 }
 
@@ -239,16 +270,19 @@ function update() {
   );
 
   //handle side to side movement
-  if (pressedKeys.a && !pressedKeys.d)
+  if (pressedKeys.a && !pressedKeys.d) {
     player.velocity.x = Math.max(
       -player.speed,
       player.velocity.x - player.acceleration
     );
+    player.mirrorSprite = true;
+  }
   if (pressedKeys.d && !pressedKeys.a) {
     player.velocity.x = Math.min(
       player.speed,
       player.velocity.x + player.acceleration
     );
+    player.mirrorSprite = false;
   }
 
   // handle depth
@@ -385,9 +419,15 @@ function update() {
   const playerFlexPoint = {
     x: player.pos.x + player.size.width / 2,
     y: player.pos.y + player.size.height / 2,
-    z: player.pos.z
-  }
-  if (lastFlexPoint && playerFlexPoint && dist(playerFlexPoint, lastFlexPoint) > tether.gap && !tether.cut) addControPoint();
+    z: player.pos.z,
+  };
+  if (
+    lastFlexPoint &&
+    playerFlexPoint &&
+    dist(playerFlexPoint, lastFlexPoint) > tether.gap &&
+    !tether.cut
+  )
+    addControPoint();
 
   // move tether control points
   let last;
@@ -455,11 +495,9 @@ function update() {
       }
 
       for (let hazzard of nearestLevel.hazzardData) {
-        if (
-          isPointInBox(tether.flexPoints[i], hazzard)
-        ) {
-          cut = true
-          indexCut = i
+        if (isPointInBox(tether.flexPoints[i], hazzard)) {
+          cut = true;
+          indexCut = i;
         }
       }
     }
@@ -474,7 +512,7 @@ function update() {
     tether.flexPoints[i].y += yDiff;
     tether.flexPoints[i].z += zDiff;
   }
-  if (cut) cutTether(indexCut)
+  if (cut) cutTether(indexCut);
 
   // redraw
   draw();
