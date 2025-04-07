@@ -2,7 +2,7 @@ const canvas = document.getElementById("game-screen");
 const ctx = canvas.getContext("2d");
 canvas.width = 1000; // 948
 canvas.height = 500; // 533
-const frameRate = 120;
+const frameRate = 60;
 const translate = {
   x: canvas.width * 3 / 4,
   y: canvas.height / 2,
@@ -106,7 +106,7 @@ function playerHitWater() {
 const tether = {
   points: [],
   flexPoints: [],
-  fidelity: 8, // how many points are flexible
+  fidelity: 6, // how many points are flexible
   gap: 0.64, // gap in game space before a new flex point is added
   flex: 0.7, // lower numbers means a quicker falloff of player affect on the tether
   cut: false, // this one is obvious
@@ -269,6 +269,8 @@ function draw() {
       let x = 0;
       let y = (tileSize / 3) * -(player.pos.z - 1);
 
+      // correct for sprite size diff from hitbox
+      ctx.translate(-player.size.width * tileSize / 2, 0)
       if (player.mirrorSprite) {
         ctx.scale(-1, 1);
         x -= tileSize;
@@ -293,7 +295,7 @@ function draw() {
     }
 
     if (d.hazzardous) ctx.fillStyle = "red";
-    else ctx.fillStyle = "gray";
+    else ctx.fillStyle = "#444";
     const topRect = d.getScreenDimensionsTop(player.pos, tileSize);
     ctx.fillRect(topRect.x, topRect.y, topRect.width + 1, topRect.height + 1);
 
@@ -641,8 +643,32 @@ function update() {
             },
             box
           )
-        )
+        ) {
+          /* TRYING TO GET THE ROPE TO GO TO THE EGDE!!!
+          const check = 10
+          const step = 0.2
+          let steps = 0
+          let found = false
+          let sign = 1
+          while (steps < check && found !== true) {
+            steps++
+            sign = (steps % 2 === 0) ? -1 : 1;
+            if (!isPointInBox(
+              {
+                x: tether.flexPoints[i].x + (step * steps * sign),
+                y: tether.flexPoints[i].y + yDiff,
+                z: tether.flexPoints[i].z,
+              },
+              box
+            )) found = true
+          }
+          if (found) tether.flexPoints.splice(i, 1, {
+            x: tether.flexPoints[i].x + (step * (steps - 1) * sign),
+            y: tether.flexPoints[i].y,
+            z: tether.flexPoints[i].z,
+          })*/
           yDiff = 0;
+        }
         // z collides
         if (
           isPointInBox(

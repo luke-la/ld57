@@ -37,7 +37,8 @@ class BubbleGenerator {
     for (let i = 0; i < this.bubbles.length; i++) {
       this.bubbles[i].y -= this.bubbles[i].speed;
       this.bubbles[i].x -= this.bubbles[i].dir;
-      if (this.bubbles[i].y < this.pos.y - 3) this.bubbles.splice(i, 1);
+      if (this.bubbles[i].y < this.pos.y - 3 || this.bubbles[i].y < 0) this.bubbles.splice(i, 1);
+      // as a note, it is a tragedy that array.pop is not the method i got to use here  T - T
     }
   }
 }
