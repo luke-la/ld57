@@ -4,9 +4,7 @@ body {
   background-color: #111;
 }
 
-canvas,
-.menu,
-#overlay {
+.screen {
   position: absolute;
   top: 25px;
   left: 25px;

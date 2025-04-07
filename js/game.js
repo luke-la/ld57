@@ -86,7 +86,7 @@ playButton.addEventListener("click", function () {
 
   // shove player into water
   setTimeout(function () {
-    player.velocity.z -= 2;
+    player.velocity.z -= 2.5;
   }, 1000);
   setTimeout(function () {
     player.velocity.z = 0;
@@ -114,12 +114,18 @@ function resetGame() {
   (translate.x = (canvas.width * 3) / 4), (player.bubbles = []);
   player.pos = {
     x: 31,
-    y: -3,
+    y: -2,
     z: 2.2,
   };
 
-  tether.points = [];
-  tether.flexPoints = [];
+  tether = {
+    points: [],
+    flexPoints: [],
+    fidelity: 6, // how many points are flexible
+    gap: 0.64, // gap in game space before a new flex point is added
+    flex: 0.7, // lower numbers means a quicker falloff of player affect on the tether
+    cut: false, // this one is obvious
+  };
   addTetherAnchor(
     {
       x: 32,
@@ -130,13 +136,16 @@ function resetGame() {
   );
   tether.cut = false;
 
-  playMenu.style.display = "block";
-  overlay.style.backgroundColor = "hsla(0, 0%, 0%, 0%)";
+  setTimeout(function () {
+    playMenu.style.display = "block";
+    overlay.style.backgroundColor = "hsla(0, 0%, 0%, 0%)";
+    overlayLast = 0
+  }, 250)
 }
 
 // TETHER HANDLING -----------------------------------------------------
 
-const tether = {
+let tether = {
   points: [],
   flexPoints: [],
   fidelity: 6, // how many points are flexible
@@ -238,9 +247,7 @@ function draw() {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
-
-  ctx.fillStyle = "lightblue";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
   ctx.translate(translate.x, translate.y);
 
   //draw background
@@ -502,6 +509,7 @@ function update() {
   player.nearestLevel = levels.findIndex(
     (level) => player.pos.y < level.endingY
   );
+  if (player.nearestLevel == -1) player.nearestLevel = levels.length - 1
 
   //handle side to side movement
   if (pressedKeys.a && !pressedKeys.d) {
