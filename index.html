@@ -19,14 +19,31 @@
   <title>SINK. | A Ludem Dare 57 Game</title>
 </head>
 <body>
-  <canvas id="game-screen"></canvas>
-  <div id="overlay" class="menu"></div>
-  <div id="game-play-menu" class="menu">
+  <image class="screen" src="./res/bg.png" />
+  <canvas id="game-screen" class="screen"></canvas>
+  <div id="overlay" class="screen"></div>
+  <div id="game-play-menu" class="screen">
     <img src="./res/title.png" alt="The word 'Sink' in large blocky letters"/>
-    <button id="btn-play"><img src="./res/play.png" alt="PLAY"></button>
+    <button id="btn-play"><img src="./res/play.png" alt="PLAY" /></button>
     <!--<button><img src="./res/options.png" alt="OPTIONS"></button>-->
   </div>
-  <div id="game-lose-menu" class="menu"></div>
-  <div id="game-win-menu" class="menu"></div>
+  <div class="container">
+    <div>
+      <h3>Welcome to SINK.</h3>
+      <p>The goal of the game is to navigate as far down the oil rig as you can.</p>
+      <p>Be careful, because the coral (the red sections) can cut your air cable.</p>
+      <p>There is no set ending yet, but if you make it down past 100m you've won!</p>
+    </div>
+    <div>
+      <p>Controls:</p>
+      <ul>
+        <li>Press Play to start!</li>
+        <li>A and D to move left and right</li>
+        <li>W and S to move forward and back</li>
+        <li>Space Bar to jump</li>
+        <li>T to weld an anchor your tether</li>
+      </ul>
+    </div>
+  </div>
 </body>
 </html>

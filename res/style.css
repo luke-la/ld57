@@ -1,15 +1,17 @@
 body {
-  margin: 0;
   position: relative;
+  width: 1000px;
+  padding-top: 500px;
+  margin: 0;
+  margin: auto;
   background-color: #111;
+  color: white;
+  font-family: monospace;
 }
 
-canvas,
-.menu,
-#overlay {
+.screen {
   position: absolute;
-  top: 25px;
-  left: 25px;
+  top: 0;
 }
 
 button {
@@ -23,4 +25,9 @@ button {
 }
 button:hover {
   border-color: white;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
 }
