@@ -12,7 +12,7 @@ const overlay = document.getElementById("overlay");
 overlay.style.width = `${canvas.width}px`;
 overlay.style.height = `${canvas.height}px`;
 
-let tileSize = Math.ceil(canvas.width / 22);
+let tileSize = Math.ceil(canvas.width / 18);
 
 let inWater = false;
 
