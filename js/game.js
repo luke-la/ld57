@@ -139,8 +139,8 @@ function resetGame() {
   setTimeout(function () {
     playMenu.style.display = "block";
     overlay.style.backgroundColor = "hsla(0, 0%, 0%, 0%)";
-    overlayLast = 0
-  }, 250)
+    overlayLast = 0;
+  }, 250);
 }
 
 // TETHER HANDLING -----------------------------------------------------
@@ -182,7 +182,7 @@ function addControPoint() {
   tether.flexPoints.push({
     x: player.pos.x + player.size.width / 2,
     y: player.pos.y + player.size.height / 2,
-    z: player.pos.z,
+    z: player.pos.z + 0.25,
   });
 }
 
@@ -229,7 +229,7 @@ function isOnScreen(x, y, w, h) {
   else return true;
 }
 
-function isOnScreen({x, y, width, height}) {
+function isOnScreen({ x, y, width, height }) {
   if (
     x > translate.x ||
     x + width < -translate.x ||
@@ -247,7 +247,7 @@ function draw() {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
-  
+
   ctx.translate(translate.x, translate.y);
 
   //draw background
@@ -301,29 +301,46 @@ function draw() {
     );
   }
 
-  //draw level
+  //draw midground
   const drawData = [];
   const minLevelToDraw = Math.max(1, player.nearestLevel - 1);
   const maxLevelToDraw = Math.min(levels.length - 1, player.nearestLevel + 1);
   for (let i = minLevelToDraw; i <= maxLevelToDraw; i++) {
-    if (levels[i].floorData) drawData.push(...levels[i].floorData);
-    if (levels[i].hazzardData) drawData.push(...levels[i].hazzardData);
+    if (levels[i].floorData) {
+      for (let floor of levels[i].floorData) {
+        drawData.push({
+          zIndex: floor.getZIndex(),
+          draw: function () {
+            ctx.fillStyle = "#444";
+            const top = floor.getScreenDimensionsTop(player.pos, tileSize);
+            ctx.fillRect(top.x, top.y, top.width + 1, top.height + 1);
+            ctx.fillStyle = "black";
+            const side = floor.getScreenDimensionsSide(player.pos, tileSize);
+            ctx.fillRect(side.x, side.y, side.width + 1, side.height + 1);
+          },
+        });
+      }
+    }
+    if (levels[i].hazzardData) {
+      for (let hazzard of levels[i].hazzardData) {
+        drawData.push({
+          zIndex: hazzard.getZIndex(),
+          draw: function () {
+            ctx.fillStyle = "red";
+            const top = hazzard.getScreenDimensionsTop(player.pos, tileSize);
+            ctx.fillRect(top.x, top.y, top.width + 1, top.height + 1);
+            ctx.fillStyle = "darkred";
+            const side = hazzard.getScreenDimensionsSide(player.pos, tileSize);
+            ctx.fillRect(side.x, side.y, side.width + 1, side.height + 1);
+          },
+        });
+      }
+    }
   }
-  drawData.sort(function (a, b) {
-    return b.getZIndex() - a.getZIndex();
-  });
 
-  let playerDrawn = false;
-
-  for (let d of drawData) {
-    if (d.getZIndex() < player.pos.z && !playerDrawn) {
-      /*ctx.fillStyle = "blue";
-      ctx.fillRect(
-        0,
-        (tileSize / 3) * -(player.pos.z - 1),
-        player.size.width * tileSize,
-        player.size.height * tileSize
-      );*/
+  drawData.push({
+    zIndex: player.pos.z,
+    draw: function () {
       ctx.save();
 
       let sprite = player.sprites.idle;
@@ -355,73 +372,65 @@ function draw() {
       sprite.checkFrameCount(frameRate);
 
       ctx.restore();
+    },
+  });
 
-      playerDrawn = true;
+  const offsetPlayerPos = {
+    x: player.pos.x + player.size.width / 2 ,
+    y: player.pos.y + player.size.height / 4,
+    z: player.pos.z + 0.25
+  }
+  const iterablePoints = [...tether.points, ...tether.flexPoints, offsetPlayerPos];
+  for (let i = 0; i < iterablePoints.length - 1; i++) {
+    console.log(iterablePoints[0]);
+    drawData.push({
+      zIndex: Math.min(iterablePoints[i].z, iterablePoints[i + 1].z),
+      draw: function () {
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = "black";
+        const start = getScreenspacePoint(iterablePoints[i]);
+        const end = getScreenspacePoint(iterablePoints[i + 1]);
+        ctx.beginPath()
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke()
+      },
+    });
+  }
+  for (let bubg of player.bubbles) {
+    for (let bubble of bubg.bubbles) {
+      drawData.push({
+        zIndex: bubble.z,
+        draw: function () {
+          const pos = getScreenspacePoint(bubble);
+          ctx.fillStyle = "white";
+          ctx.fillRect(
+            pos.x,
+            pos.y,
+            (bubble.size * tileSize) / 16,
+            (bubble.size * tileSize) / 16
+          );
+        }
+      })
     }
-
-    if (d.hazzardous) ctx.fillStyle = "red";
-    else ctx.fillStyle = "#444";
-    const topRect = d.getScreenDimensionsTop(player.pos, tileSize);
-    ctx.fillRect(topRect.x, topRect.y, topRect.width + 1, topRect.height + 1);
-
-    if (d.hazzardous) ctx.fillStyle = "darkred";
-    else ctx.fillStyle = "black";
-    const sideRect = d.getScreenDimensionsSide(player.pos, tileSize);
-    ctx.fillRect(
-      sideRect.x,
-      sideRect.y,
-      sideRect.width + 1,
-      sideRect.height + 1
-    );
   }
+  
 
-  // draw tether
-  // get line segments
+  drawData.sort(function (a, b) {
+    return b.zIndex - a.zIndex;
+  });
 
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = "black";
-  ctx.beginPath();
-  const start = getScreenspacePoint(tether.points[0]);
-  ctx.moveTo(start.x, start.y);
-  for (let i = 0; i < tether.points.length; i++) {
-    const point = getScreenspacePoint(tether.points[i]);
-    ctx.lineTo(point.x, point.y);
+  for (let d of drawData) {
+    d.draw();
   }
-  if (tether.cut) {
-    ctx.stroke();
-    const startFlex = getScreenspacePoint(tether.points[0]);
-    ctx.beginPath(startFlex.x, startFlex.y);
-  }
-  for (let i = 0; i < tether.flexPoints.length; i++) {
-    const point = getScreenspacePoint(tether.flexPoints[i]);
-    ctx.lineTo(point.x, point.y);
-  }
-  ctx.lineTo(
-    (player.size.width * tileSize) / 2,
-    (tileSize / 3) * -(player.pos.z - 2)
-  );
-  ctx.stroke();
 
   // draw bubbles
   const bubbles = [];
-  for (let bubg of player.bubbles) {
-    bubbles.push(...bubg.bubbles);
-  }
-  ctx.fillStyle = "white";
-  for (let b of bubbles) {
-    const pos = getScreenspacePoint(b);
-    ctx.fillRect(
-      pos.x,
-      pos.y,
-      (b.size * tileSize) / 16,
-      (b.size * tileSize) / 16
-    );
-  }
   // draw water
 
-  const lightness = 150 - player.pos.y / 100 //????????? bflsbfhsdjhcba
-  const transparancy = (inWater) ? 50 + (player.pos.y / 10) : 80;
-  ctx.fillStyle = `hsla(220, 50%, 50%, ${transparancy}%)`;
+  const lightness = 50 - player.pos.y / 10;
+  const transparancy = inWater ? 50 + player.pos.y / 10 : 80;
+  ctx.fillStyle = `hsla(220, 50%, ${lightness}%, ${transparancy}%)`;
   const ocean = background.ocean.getScreenDimensions(player.pos, tileSize);
   ctx.fillRect(ocean.x, ocean.y, ocean.width, ocean.height);
 
@@ -509,7 +518,7 @@ function update() {
   player.nearestLevel = levels.findIndex(
     (level) => player.pos.y < level.endingY
   );
-  if (player.nearestLevel == -1) player.nearestLevel = levels.length - 1
+  if (player.nearestLevel == -1) player.nearestLevel = levels.length - 1;
 
   //handle side to side movement
   if (pressedKeys.a && !pressedKeys.d) {
